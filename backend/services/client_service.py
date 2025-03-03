@@ -162,3 +162,37 @@ def calculate_fee_summary(client_id: int) -> Dict[str, Any]:
         'fee_type': fee_type,
         'rate': contract['percent_rate'] if fee_type in ('percentage', 'percent') else contract['flat_rate']
     }
+
+def update_client_folder_path(client_id: int, folder_path: str) -> Dict[str, Any]:
+    """
+    Update a client's OneDrive folder path.
+    
+    Args:
+        client_id: ID of the client
+        folder_path: New folder path to use
+        
+    Returns:
+        Dictionary with update status
+    """
+    # Check if client exists
+    client = client_queries.get_client_by_id(client_id)
+    if not client:
+        return {
+            "success": False,
+            "message": "Client not found"
+        }
+    
+    # Update folder path
+    success = client_queries.update_client_folder_path(client_id, folder_path)
+    
+    if not success:
+        return {
+            "success": False,
+            "message": "Failed to update client folder path"
+        }
+    
+    return {
+        "success": True,
+        "client_id": client_id,
+        "folder_path": folder_path
+    }

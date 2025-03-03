@@ -1,7 +1,5 @@
 "use client"
-
 import type React from "react"
-
 import { useState } from "react"
 import { CalendarIcon, Paperclip } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,15 +12,13 @@ import { Calendar } from "@/components/ui/calendar"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import type { PaymentFormData } from "./types"
-
+import type { PaymentFormData } from "../../../types"
 interface PaymentFormProps {
   clientId: string
   initialData?: PaymentFormData
   onCancel: () => void
   isEditing: boolean
 }
-
 export function PaymentForm({ clientId, initialData, onCancel, isEditing }: PaymentFormProps) {
   const [formData, setFormData] = useState<PaymentFormData>(
     initialData || {
@@ -45,18 +41,15 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
   const [hasChanges, setHasChanges] = useState(false)
   const [customMethod, setCustomMethod] = useState("")
   const [isNotesOpen, setIsNotesOpen] = useState(!!formData.notes || !!formData.attachmentUrl)
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
     setHasChanges(true)
   }
-
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
     setHasChanges(true)
   }
-
   const handleDateChange = (newDate: Date | undefined) => {
     setDate(newDate)
     if (newDate) {
@@ -64,7 +57,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
       setHasChanges(true)
     }
   }
-
   const handleSplitPaymentToggle = (checked: boolean) => {
     setIsSplitPayment(checked)
     setFormData((prev) => ({
@@ -76,24 +68,20 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
     }))
     setHasChanges(true)
   }
-
   const handleAttachFile = () => {
     // Implement file attachment logic here
     console.log("File attachment triggered")
     setHasChanges(true)
   }
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     // Implement form submission logic here
     console.log("Submitting payment:", formData)
     setHasChanges(false)
   }
-
   const handleCancel = () => {
     onCancel()
   }
-
   const handleClear = () => {
     if (hasChanges) {
       // Implement confirmation dialog logic here
@@ -116,7 +104,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
     setCustomMethod("")
     setHasChanges(false)
   }
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -139,7 +126,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
             </PopoverContent>
           </Popover>
         </div>
-
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="appliedPeriod" className="text-sm font-medium">
@@ -202,7 +188,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
           </div>
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="space-y-2">
           <Label htmlFor="aum" className="text-sm font-medium">
@@ -221,7 +206,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
             />
           </div>
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="amount" className="text-sm font-medium">
             Payment Amount
@@ -240,7 +224,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
             />
           </div>
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="method" className="text-sm font-medium">
             Payment Method <span className="text-xs text-muted-foreground">(optional)</span>
@@ -267,7 +250,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
           )}
         </div>
       </div>
-
       {/* Modified layout to position buttons next to the notes section in a horizontal arrangement */}
       <div className="flex flex-col md:flex-row gap-5">
         {/* Notes & Attachments section - takes up more space */}
@@ -319,7 +301,6 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
             </div>
           </details>
         </div>
-
         {/* Buttons section - horizontal layout */}
         <div className="md:flex md:items-end md:space-x-3 space-y-3 md:space-y-0">
           {isEditing && (
@@ -336,4 +317,3 @@ export function PaymentForm({ clientId, initialData, onCancel, isEditing }: Paym
     </form>
   )
 }
-

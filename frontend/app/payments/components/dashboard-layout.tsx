@@ -1,11 +1,9 @@
 "use client"
-
-import { useState } from "react"
+import { useState, ReactNode } from "react"
 import { ClientSidebar } from "./client-sidebar"
-import { TopNavigation } from "./top-navigation"
-import { ClientPaymentPage } from "./client-payment-page"
-import type { Client } from "./types"
-
+import TopNavigation from "@/components/top-navigation"
+import { ClientPaymentPage } from "../page"
+import type { Client } from "../../../types"
 // Sample data
 const sampleClients: Client[] = [
   {
@@ -70,50 +68,45 @@ const sampleClients: Client[] = [
   },
 ]
 
-export default function DashboardLayout() {
+interface DashboardLayoutProps {
+  children: ReactNode
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [documentViewerOpen, setDocumentViewerOpen] = useState(false)
   const [currentDocument, setCurrentDocument] = useState<string | null>(null)
-
   const toggleDocumentViewer = () => {
     setDocumentViewerOpen(!documentViewerOpen)
   }
-
   const viewDocument = (documentUrl: string) => {
     setCurrentDocument(documentUrl)
     if (!documentViewerOpen) {
       setDocumentViewerOpen(true)
     }
   }
-
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="min-h-screen flex flex-col">
       <TopNavigation />
-
-      <div className="flex flex-1 overflow-hidden">
-        <ClientSidebar clients={sampleClients} selectedClient={selectedClient} onSelectClient={setSelectedClient} />
-
-        <main className="flex-1 overflow-hidden p-6">
-          {selectedClient ? (
-            <ClientPaymentPage
-              client={selectedClient}
-              onViewDocument={viewDocument}
-              toggleDocumentViewer={toggleDocumentViewer}
-              documentViewerOpen={documentViewerOpen}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center p-8 max-w-md">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-2">Welcome to the Payment Dashboard</h2>
-                <p className="text-gray-500 mb-6">
-                  Select a client from the sidebar to view and manage their payment details.
-                </p>
-              </div>
+      <main className="flex-1 bg-gray-100">
+        {selectedClient ? (
+          <ClientPaymentPage
+            client={selectedClient}
+            onViewDocument={viewDocument}
+            toggleDocumentViewer={toggleDocumentViewer}
+            documentViewerOpen={documentViewerOpen}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center p-8 max-w-md">
+              <h2 className="text-2xl font-semibold text-gray-700 mb-2">Welcome to the Payment Dashboard</h2>
+              <p className="text-gray-500 mb-6">
+                Select a client from the sidebar to view and manage their payment details.
+              </p>
             </div>
-          )}
-        </main>
-      </div>
+          </div>
+        )}
+      </main>
     </div>
   )
 }
-

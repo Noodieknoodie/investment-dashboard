@@ -88,3 +88,30 @@ API endpoint is needed for easy retrieval of all contract details when selecting
 ---
 
 All these TODOs are reasonable steps to complete the backend for the payment page functionality without introducing unnecessary complications. They address direct requirements from the blueprint while ensuring the core functionality works correctly.
+
+
+
+----
+
+
+# FILE SYSTEM ATTEMPTED 
+  1. We've completely rewritten the file system service to work with your actual file structure:
+    - Used a configurable shared folder path that adapts to different user environments
+    - Implemented scanning of existing directories to find and register files
+    - Added support for both client document directories and payment-specific folders
+  2. We've enhanced the file handling capabilities:
+    - Added ability to scan directories and register existing files
+    - Improved path handling to work with your shared OneDrive structure
+    - Implemented folder structure discovery
+  3. We've added client folder path management:
+    - Added ability to update a client's folder path in the database
+    - Created endpoints to configure the shared paths
+
+  These changes make the backend capable of working with your actual file structure, rather than trying to create a parallel structure.       
+  The system will now:
+
+  1. Scan and recognize existing files in your "401Ks\Current PlansCLIENT_NAME}" folders
+  2. Store relative paths in the database that will work for any user on the system
+  3. Adapt to different user environments automatically by detecting the correct path to the shared folder
+
+  This provides a solid foundation for the payment page's document handling requirements and prepares the system for future enhancements. 

@@ -33,7 +33,8 @@ async def get_payment_files(payment_id: int):
 async def upload_file(
     client_id: int,
     file: UploadFile = File(...),
-    for_payment: bool = Form(False)
+    for_payment: bool = Form(False),
+    year: Optional[int] = Form(None)
 ):
     """Upload a file for a client"""
     try:
@@ -46,7 +47,8 @@ async def upload_file(
             client_id=client_id,
             file_obj=file.file,
             filename=file.filename,
-            for_payment=for_payment
+            for_payment=for_payment,
+            year=year
         )
         
         return result
@@ -122,5 +124,46 @@ async def search_client_files(client_id: int, search: str = Query(...)):
     """Search for client files by name"""
     try:
         return file_service.search_client_files(client_id, search)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/scan-directory/{client_id}")
+async def scan_client_directory(
+    client_id: int, 
+    register: bool = Query(False, description="Whether to register found files in the database")
+):
+    """
+    Scan a client's directory structure and optionally register files
+    """
+    try:
+        return file_service.scan_client_directory(client_id, register)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/register-existing/{client_id}")
+async def register_existing_file(
+    client_id: int,
+    file_path: str = Form(..., description="Path to the file (absolute or relative to shared folder)")
+):
+    """
+    Register an existing file in the database
+    """
+    try:
+        return file_service.register_existing_file(client_id, file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/configure-paths")
+async def configure_shared_folder_path(
+    path: str = Form(..., description="Path to the shared folder")
+):
+    """
+    Configure the shared folder path
+    """
+    try:
+        success = file_service.save_shared_folder_config(path)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+        return {"success": True, "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

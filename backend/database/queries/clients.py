@@ -1,17 +1,9 @@
 # backend/database/queries/clients.py
 # Client-related queries
-
 from database.connection import execute_query, execute_single_query
 from typing import List, Dict, Any, Optional
 import datetime
-
 def get_all_clients() -> List[Dict[str, Any]]:
-    """
-    Get all active clients.
-    
-    Returns:
-        List of client dictionaries
-    """
     query = """
         SELECT client_id, display_name, full_name, ima_signed_date, onedrive_folder_path
         FROM clients
@@ -19,34 +11,17 @@ def get_all_clients() -> List[Dict[str, Any]]:
         ORDER BY display_name
     """
     return execute_query(query)
-
+	
 def get_client_by_id(client_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Get a single client by ID.
-    
-    Args:
-        client_id: ID of the client to retrieve
-        
-    Returns:
-        Client dictionary or None if not found
-    """
+ 
     query = """
         SELECT client_id, display_name, full_name, ima_signed_date, onedrive_folder_path
         FROM clients
         WHERE client_id = ? AND valid_to IS NULL
     """
     return execute_single_query(query, (client_id,))
-
+	
 def get_client_with_contracts(client_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Get a client with all their contracts.
-    
-    Args:
-        client_id: ID of the client to retrieve
-        
-    Returns:
-        Dictionary with client data and list of contracts, or None if not found
-    """
     # Get the client
     client = get_client_by_id(client_id)
     if not client:
@@ -67,14 +42,8 @@ def get_client_with_contracts(client_id: int) -> Optional[Dict[str, Any]]:
     # Add contracts to client data
     client['contracts'] = contracts
     return client
-
+	
 def get_clients_by_provider() -> List[Dict[str, Any]]:
-    """
-    Get clients with their provider information.
-    
-    Returns:
-        List of client dictionaries including provider information
-    """
     query = """
         SELECT 
             c.client_id, 
@@ -87,17 +56,8 @@ def get_clients_by_provider() -> List[Dict[str, Any]]:
         ORDER BY con.provider_name, c.display_name
     """
     return execute_query(query)
-
+	
 def get_client_metrics(client_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Get metrics data for a client.
-    
-    Args:
-        client_id: ID of the client
-        
-    Returns:
-        Dictionary with metrics data or None if not found
-    """
     query = """
         SELECT 
             client_id, last_payment_date, last_payment_amount,
@@ -107,17 +67,8 @@ def get_client_metrics(client_id: int) -> Optional[Dict[str, Any]]:
         WHERE client_id = ?
     """
     return execute_single_query(query, (client_id,))
-
+	
 def get_client_compliance_status(client_id: int) -> Dict[str, str]:
-    """
-    Determine compliance status and color code for a client.
-    
-    Args:
-        client_id: ID of the client
-        
-    Returns:
-        Dict with status and color code
-    """
     # Get last payment information
     query = """
         SELECT 
@@ -198,19 +149,8 @@ def get_client_compliance_status(client_id: int) -> Dict[str, str]:
                 "status": "red",
                 "reason": "Payment overdue"
             }
-
+			
 def get_quarterly_summary(client_id: int, year: int, quarter: int) -> Optional[Dict[str, Any]]:
-    """
-    Get quarterly summary data for a client.
-    
-    Args:
-        client_id: ID of the client
-        year: Year to retrieve data for
-        quarter: Quarter to retrieve data for
-        
-    Returns:
-        Dictionary with quarterly summary data or None if not found
-    """
     query = """
         SELECT 
             id, client_id, year, quarter, total_payments, 
@@ -220,18 +160,8 @@ def get_quarterly_summary(client_id: int, year: int, quarter: int) -> Optional[D
         WHERE client_id = ? AND year = ? AND quarter = ?
     """
     return execute_single_query(query, (client_id, year, quarter))
-
+	
 def get_yearly_summary(client_id: int, year: int) -> Optional[Dict[str, Any]]:
-    """
-    Get yearly summary data for a client.
-    
-    Args:
-        client_id: ID of the client
-        year: Year to retrieve data for
-        
-    Returns:
-        Dictionary with yearly summary data or None if not found
-    """
     query = """
         SELECT 
             id, client_id, year, total_payments, total_assets, 
@@ -240,3 +170,18 @@ def get_yearly_summary(client_id: int, year: int) -> Optional[Dict[str, Any]]:
         WHERE client_id = ? AND year = ?
     """
     return execute_single_query(query, (client_id, year))
+	
+def update_client_folder_path(client_id: int, folder_path: str) -> bool:
+    from database.connection import execute_update
+    
+    # Normalize path (ensure consistent format)
+    normalized_path = folder_path.replace('/', '\\')
+    
+    query = """
+        UPDATE clients
+        SET onedrive_folder_path = ?
+        WHERE client_id = ? AND valid_to IS NULL
+    """
+    
+    rows_updated = execute_update(query, (normalized_path, client_id))
+    return rows_updated > 0

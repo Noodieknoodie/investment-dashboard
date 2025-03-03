@@ -1,5 +1,4 @@
 "use client"
-
 import { useState } from "react"
 import { Edit, FileText, MoreHorizontal, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,36 +14,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import type { Payment } from "./types"
-
+import type { Payment } from "../../../types"
 interface PaymentHistoryProps {
   payments: Payment[]
   onEdit: (payment: Payment) => void
   onViewDocument: (documentUrl: string) => void
 }
-
 export function PaymentHistory({ payments, onEdit, onViewDocument }: PaymentHistoryProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null)
-
   const handleDeleteClick = (payment: Payment) => {
     setPaymentToDelete(payment)
     setDeleteDialogOpen(true)
   }
-
   const handleConfirmDelete = () => {
     // In a real app, you would delete the payment from the server here
     console.log("Deleting payment:", paymentToDelete)
     setDeleteDialogOpen(false)
     setPaymentToDelete(null)
   }
-
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
   }
-
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -52,7 +45,6 @@ export function PaymentHistory({ payments, onEdit, onViewDocument }: PaymentHist
       currency: "USD",
     }).format(amount)
   }
-
   return (
     <>
       <div className="rounded-md border">
@@ -126,7 +118,6 @@ export function PaymentHistory({ payments, onEdit, onViewDocument }: PaymentHist
           </TableBody>
         </Table>
       </div>
-
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -148,4 +139,3 @@ export function PaymentHistory({ payments, onEdit, onViewDocument }: PaymentHist
     </>
   )
 }
-
