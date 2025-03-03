@@ -1,7 +1,7 @@
 # backend/models/schemas.py
 # All data schemas in one file (keeps it simple)
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Union, Literal
 from datetime import datetime, date
 from decimal import Decimal
@@ -14,8 +14,7 @@ class Client(BaseModel):
     ima_signed_date: Optional[str] = None
     onedrive_folder_path: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Contact(BaseModel):
     """Client contact model"""
@@ -29,8 +28,7 @@ class Contact(BaseModel):
     physical_address: Optional[str] = None
     mailing_address: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Contract(BaseModel):
     """Client contract model"""
@@ -46,15 +44,13 @@ class Contract(BaseModel):
     num_people: Optional[int] = None
     notes: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ClientWithContract(Client):
     """Client with associated contract information"""
     contracts: List[Contract] = []
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Payment(BaseModel):
     """Payment model with validation"""
@@ -79,7 +75,8 @@ class Payment(BaseModel):
     applied_end_quarter: Optional[int] = None
     applied_end_quarter_year: Optional[int] = None
     
-    @validator('received_date')
+    @field_validator('received_date')
+    @classmethod
     def validate_received_date(cls, v):
         try:
             # Check if date is valid
@@ -88,14 +85,14 @@ class Payment(BaseModel):
         except ValueError:
             raise ValueError('received_date must be in YYYY-MM-DD format')
     
-    @validator('actual_fee')
+    @field_validator('actual_fee')
+    @classmethod
     def validate_actual_fee(cls, v):
         if v <= 0:
             raise ValueError('actual_fee must be greater than zero')
         return v
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PaymentCreate(BaseModel):
     """Model for creating a new payment"""
@@ -115,7 +112,8 @@ class PaymentCreate(BaseModel):
     end_period: Optional[int] = None  # Required only for split payments
     end_period_year: Optional[int] = None  # Required only for split payments
     
-    @validator('received_date')
+    @field_validator('received_date')
+    @classmethod
     def validate_received_date(cls, v):
         try:
             # Check if date is valid and not in the future
@@ -128,20 +126,22 @@ class PaymentCreate(BaseModel):
                 raise ValueError('received_date must be in YYYY-MM-DD format')
             raise
     
-    @validator('actual_fee')
+    @field_validator('actual_fee')
+    @classmethod
     def validate_actual_fee(cls, v):
         if v <= 0:
             raise ValueError('actual_fee must be greater than zero')
         return v
     
-    @validator('end_period', 'end_period_year')
-    def validate_end_period(cls, v, values):
+    @field_validator('end_period', 'end_period_year')
+    @classmethod
+    def validate_end_period(cls, v, info):
+        values = info.data
         if values.get('is_split_payment') and v is None:
             raise ValueError('end_period and end_period_year are required for split payments')
         return v
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PaymentUpdate(BaseModel):
     """Model for updating an existing payment"""
@@ -154,7 +154,8 @@ class PaymentUpdate(BaseModel):
     # We don't allow updating period fields to avoid complex data integrity issues
     # If a period needs to change, the payment should be deleted and recreated
     
-    @validator('received_date')
+    @field_validator('received_date')
+    @classmethod
     def validate_received_date(cls, v):
         if v is not None:
             try:
@@ -169,14 +170,14 @@ class PaymentUpdate(BaseModel):
                 raise
         return v
     
-    @validator('actual_fee')
+    @field_validator('actual_fee')
+    @classmethod
     def validate_actual_fee(cls, v):
         if v is not None and v <= 0:
             raise ValueError('actual_fee must be greater than zero')
         return v
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ClientMetrics(BaseModel):
     """Client metrics model for dashboard display"""
@@ -189,8 +190,7 @@ class ClientMetrics(BaseModel):
     avg_quarterly_payment: Optional[Decimal] = None
     last_recorded_assets: Optional[Decimal] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PaymentWithDetails(Payment):
     """Payment with additional details for display"""
@@ -202,8 +202,7 @@ class PaymentWithDetails(Payment):
     payment_schedule: Optional[str] = None  # contract.payment_schedule
     files: List[dict] = []  # Associated files
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ClientFile(BaseModel):
     """Client file model"""
@@ -213,8 +212,7 @@ class ClientFile(BaseModel):
     onedrive_path: str
     uploaded_at: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PaymentFile(BaseModel):
     """Payment-file association model"""
@@ -222,8 +220,7 @@ class PaymentFile(BaseModel):
     file_id: int
     linked_at: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FileUpload(BaseModel):
     """File upload response model"""
@@ -232,8 +229,7 @@ class FileUpload(BaseModel):
     file_name: str
     onedrive_path: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ExpectedFeeRequest(BaseModel):
     """Request model for calculating expected fee"""
@@ -244,8 +240,7 @@ class ExpectedFeeRequest(BaseModel):
     period: int  # Month or quarter number
     year: int
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ExpectedFeeResponse(BaseModel):
     """Response model for expected fee calculation"""
@@ -253,8 +248,7 @@ class ExpectedFeeResponse(BaseModel):
     fee_type: Optional[str] = None
     calculation_method: str  # How the fee was calculated
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ClientSnapshot(BaseModel):
     """Comprehensive client snapshot for dashboard display"""
@@ -262,8 +256,7 @@ class ClientSnapshot(BaseModel):
     contracts: List[Contract] = []
     metrics: Optional[ClientMetrics] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PaginatedResponse(BaseModel):
     """Generic paginated response model"""
@@ -272,5 +265,4 @@ class PaginatedResponse(BaseModel):
     page_size: int
     items: List[dict]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,11 @@
 # Database queries package initialization
-# Import all query modules to make their functions available at the package level
+from .clients import get_all_clients, get_client_by_id, get_client_with_contracts, get_client_metrics
+from .clients import get_client_compliance_status, get_clients_by_provider
+from .clients import get_quarterly_summary, get_yearly_summary
 
-from database.queries.clients import *
-from database.queries.payments import *
-from database.queries.files import *
+from .payments import get_client_payments, get_payment_by_id, create_payment, update_payment, delete_payment
+from .payments import create_split_payments, get_split_payment_group, calculate_expected_fee, get_payment_files
+
+from .files import get_client_files, get_file_by_id, create_file, delete_file
+from .files import link_file_to_payment, unlink_file_from_payment, get_payment_count_for_file
+from .files import get_file_exists, search_client_files

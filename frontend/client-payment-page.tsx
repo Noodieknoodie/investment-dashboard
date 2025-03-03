@@ -110,7 +110,7 @@ export function ClientPaymentPage({
               <ClientDetails client={client} />
             </div>
 
-            <div id="payment-form-section">
+            <div id="payment-form-section" className={documentViewerOpen ? "" : "px-[20%]"}>
               <Card className={`transition-all duration-300 ${editingPayment ? "border-amber-500 shadow-md" : ""}`}>
                 <CardHeader className={`${editingPayment ? "bg-amber-50" : ""}`}>
                   <div className="flex items-center space-x-2">

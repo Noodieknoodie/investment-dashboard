@@ -6,22 +6,12 @@ from typing import List, Dict, Any, Optional
 from models.schemas import Client, ClientSnapshot, Contract, ClientMetrics
 
 def get_all_clients() -> List[Client]:
-    """
-    Get list of all active clients.
-    
-    Returns:
-        List of Client objects
-    """
+
     client_data = client_queries.get_all_clients()
     return [Client(**client) for client in client_data]
 
 def get_clients_by_provider() -> List[Dict[str, Any]]:
-    """
-    Get clients grouped by provider.
-    
-    Returns:
-        Dictionary with providers as keys and client lists as values
-    """
+
     clients = client_queries.get_clients_by_provider()
     
     # Group clients by provider
@@ -48,15 +38,7 @@ def get_clients_by_provider() -> List[Dict[str, Any]]:
     return result
 
 def get_client_snapshot(client_id: int) -> Optional[ClientSnapshot]:
-    """
-    Get comprehensive client snapshot with related data.
-    
-    Args:
-        client_id: Client ID
-        
-    Returns:
-        ClientSnapshot object or None if client not found
-    """
+
     # Get client and contract data
     client_data = client_queries.get_client_with_contracts(client_id)
     if not client_data:
@@ -87,28 +69,11 @@ def get_client_snapshot(client_id: int) -> Optional[ClientSnapshot]:
     )
 
 def get_client_compliance_status(client_id: int) -> Dict[str, str]:
-    """
-    Get client compliance status with color code and reason.
-    
-    Args:
-        client_id: Client ID
-        
-    Returns:
-        Dictionary with status and reason
-    """
+
     return client_queries.get_client_compliance_status(client_id)
 
 def calculate_fee_summary(client_id: int) -> Dict[str, Any]:
-    """
-    Calculate fee summary for client dashboard display.
-    Shows monthly, quarterly and annual equivalents.
-    
-    Args:
-        client_id: Client ID
-        
-    Returns:
-        Dictionary with fee summary
-    """
+
     # Get client contracts
     client_data = client_queries.get_client_with_contracts(client_id)
     if not client_data or not client_data['contracts']:
