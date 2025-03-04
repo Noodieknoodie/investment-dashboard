@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -18,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import type { Payment } from "@/types"
-
 interface ClientPaymentPageProps {
   clientId: number
   complianceStatus: ComplianceStatus
@@ -26,7 +24,6 @@ interface ClientPaymentPageProps {
   toggleDocumentViewer: () => void
   documentViewerOpen: boolean
 }
-
 export function ClientPaymentPage({
   clientId,
   complianceStatus,
@@ -34,16 +31,13 @@ export function ClientPaymentPage({
   toggleDocumentViewer,
   documentViewerOpen,
 }: ClientPaymentPageProps) {
-  // Get client snapshot data
-  const {
+    const {
     clientSnapshot,
     feeSummary,
     isLoading: isClientLoading,
     error: clientError
   } = useClientSnapshot(clientId);
-
-  // Get payments for this client
-  const {
+    const {
     payments,
     isLoading: isPaymentsLoading,
     error: paymentsError,
@@ -53,54 +47,37 @@ export function ClientPaymentPage({
     deleteSplitPaymentGroup,
     refreshPayments
   } = usePayments(clientId);
-
-  // State for payment editing
-  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
+    const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
   const [currentDocumentUrl, setCurrentDocumentUrl] = useState<string | null>(null);
-
-  // Fetch payment details when editing
-  const {
+    const {
     payment: editingPayment,
     isLoading: isPaymentDetailLoading,
     error: paymentDetailError
   } = usePaymentDetails(editingPaymentId);
-
-  // Map backend data to UI format
-  const uiClient = clientSnapshot ? mapClientSnapshotToUI(clientSnapshot, complianceStatus) : null;
+    const uiClient = clientSnapshot ? mapClientSnapshotToUI(clientSnapshot, complianceStatus) : null;
   const uiPayments = payments.map(payment => mapPaymentToUI(payment));
-
-  // Check if any providers are in the client's contracts
-  const activeContract = clientSnapshot?.contracts?.[0] || null;
-
-  // Handle edit payment
-  const handleEditPayment = (payment: Payment) => {
+    // Find contract that matches this client's ID instead of assuming first one is correct
+    const activeContract = clientSnapshot?.contracts?.find(contract => contract.client_id === clientId) || clientSnapshot?.contracts?.[0] || null;
+    const handleEditPayment = (payment: Payment) => {
     setEditingPaymentId(parseInt(payment.id, 10));
-    // Scroll to the payment form
-    document.getElementById("payment-form-section")?.scrollIntoView({ behavior: "smooth" });
+        document.getElementById("payment-form-section")?.scrollIntoView({ behavior: "smooth" });
   }
-
   const handleCancelEdit = () => {
     setEditingPaymentId(null);
   }
-
   const handleViewDocument = (documentUrl: string) => {
     setCurrentDocumentUrl(documentUrl);
     onViewDocument(documentUrl);
   }
-
-  // Handle delete payment (including split payment groups)
-  const handleDeletePayment = async (paymentId: string) => {
+    const handleDeletePayment = async (paymentId: string) => {
     try {
       const numericPaymentId = parseInt(paymentId, 10);
       const payment = uiPayments.find(p => p.id === paymentId);
-
       if (payment?.isSplitPayment && payment.splitGroupId) {
-        // For split payments, delete the entire group
-        const result = await deleteSplitPaymentGroup(payment.splitGroupId);
+                const result = await deleteSplitPaymentGroup(payment.splitGroupId);
         return result;
       } else {
-        // For single payments
-        const result = await deletePayment(numericPaymentId);
+                const result = await deletePayment(numericPaymentId);
         return result;
       }
     } catch (error) {
@@ -108,12 +85,9 @@ export function ClientPaymentPage({
       return false;
     }
   };
-
-  // Map form submission to API call
-  const handleCreatePayment = async (formData: any) => {
+    const handleCreatePayment = async (formData: any) => {
     try {
       const isSplitPayment = formData.appliedPeriod === "multiple";
-
       await createPayment({
         client_id: clientId,
         contract_id: activeContract?.contract_id as number,
@@ -128,20 +102,15 @@ export function ClientPaymentPage({
         end_period: isSplitPayment ? parseInt(formData.endPeriod?.split('-')[0], 10) : undefined,
         end_period_year: isSplitPayment ? parseInt(formData.endPeriod?.split('-')[1], 10) : undefined
       });
-
-      // Refresh payments
-      await refreshPayments();
-
+            await refreshPayments();
       return true;
     } catch (error) {
       console.error("Error creating payment:", error);
       return false;
     }
   };
-
   const handleUpdatePayment = async (formData: any) => {
     if (!editingPaymentId) return false;
-
     try {
       await updatePayment(editingPaymentId, {
         received_date: formData.receivedDate,
@@ -150,29 +119,21 @@ export function ClientPaymentPage({
         method: formData.method,
         notes: formData.notes
       });
-
-      // Refresh payments
-      await refreshPayments();
-
-      // Reset editing state
-      setEditingPaymentId(null);
-
+            await refreshPayments();
+            setEditingPaymentId(null);
       return true;
     } catch (error) {
       console.error("Error updating payment:", error);
       return false;
     }
   };
-
-  // Show loading state
-  if (isClientLoading) {
+    if (isClientLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between mb-6">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-10 w-32" />
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map(i => (
             <Card key={i}>
@@ -192,7 +153,6 @@ export function ClientPaymentPage({
             </Card>
           ))}
         </div>
-
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-48" />
@@ -215,9 +175,7 @@ export function ClientPaymentPage({
       </div>
     );
   }
-
-  // Show error state
-  if (clientError || !clientSnapshot) {
+    if (clientError || !clientSnapshot) {
     return (
       <Alert variant="destructive" className="mb-6">
         <AlertCircle className="h-4 w-4" />
@@ -227,7 +185,6 @@ export function ClientPaymentPage({
       </Alert>
     );
   }
-
   return (
     <div className={`flex h-full ${documentViewerOpen ? "space-x-4" : ""}`}>
       <div className={`flex flex-col overflow-hidden ${documentViewerOpen ? "w-3/5" : "w-full"}`}>
@@ -238,7 +195,6 @@ export function ClientPaymentPage({
             {documentViewerOpen ? "Hide Documents" : "View Documents"}
           </Button>
         </div>
-
         {clientError && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -247,7 +203,6 @@ export function ClientPaymentPage({
             </AlertDescription>
           </Alert>
         )}
-
         {paymentsError && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -256,7 +211,6 @@ export function ClientPaymentPage({
             </AlertDescription>
           </Alert>
         )}
-
         <ScrollArea className="flex-grow">
           <div className="space-y-6 pr-4">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -267,7 +221,6 @@ export function ClientPaymentPage({
                 />
               )}
             </div>
-
             <div id="payment-form-section" className={documentViewerOpen ? "" : "px-[20%]"}>
               <Card className={`transition-all duration-300 ${editingPaymentId ? "border-amber-500 shadow-md" : ""}`}>
                 <CardHeader className={`${editingPaymentId ? "bg-amber-50" : ""}`}>
@@ -314,8 +267,7 @@ export function ClientPaymentPage({
                           amount: editingPayment.actual_fee.toString(),
                           method: editingPayment.method || "",
                           notes: editingPayment.notes || "",
-                          attachmentUrl: "", // We'll handle this separately
-                        }
+                          attachmentUrl: "",                         }
                         : undefined
                     }
                     onCancel={handleCancelEdit}
@@ -326,7 +278,6 @@ export function ClientPaymentPage({
                 </CardContent>
               </Card>
             </div>
-
             <div>
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Payment History</h2>
               <PaymentHistory
@@ -341,7 +292,6 @@ export function ClientPaymentPage({
           </div>
         </ScrollArea>
       </div>
-
       {documentViewerOpen && (
         <div className="w-2/5">
           <DocumentViewer documentUrl={currentDocumentUrl} onClose={toggleDocumentViewer} className="h-full" />

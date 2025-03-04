@@ -215,19 +215,6 @@ def create_split_payments(
     end_period: int,
     end_period_year: int
 ) -> List[int]:
-    """
-    Create multiple payment records for a split payment.
-    Each period in the range gets an equal portion of the total amount.
-    
-    Args:
-        Contract and client details
-        Payment details
-        is_monthly: True if monthly schedule, False if quarterly
-        start/end period details
-        
-    Returns:
-        List of created payment IDs
-    """
     # Generate a unique ID for the split payment group
     split_group_id = str(uuid.uuid4())
     
@@ -476,12 +463,10 @@ def get_split_payment_group(split_group_id: str) -> List[Dict[str, Any]]:
 def calculate_expected_fee(contract_id: int, total_assets: Optional[int], period_type: str) -> Optional[float]:
     """
     Calculate expected fee based on contract and assets.
-    
     Args:
         contract_id: Contract ID
         total_assets: Total assets amount (can be None for flat fee)
         period_type: 'month' or 'quarter'
-        
     Returns:
         Expected fee amount or None if not enough information
     """
@@ -497,48 +482,41 @@ def calculate_expected_fee(contract_id: int, total_assets: Optional[int], period
         contract_id = ? AND
         valid_to IS NULL
     """
-    
     contract = execute_single_query(query, (contract_id,))
-    
     if not contract:
         return None
     
-    fee_type = contract['fee_type'].lower() if contract['fee_type'] else None
+    # Normalize period type to match database terminology
+    period_type_normalized = 'monthly' if period_type == 'month' else 'quarterly' if period_type == 'quarter' else period_type
     
+    fee_type = contract['fee_type'].lower() if contract['fee_type'] else None
     # Handle flat fee
     if fee_type == 'flat':
         flat_rate = contract['flat_rate']
         if flat_rate is None:
             return None
-        
         # Return full flat rate if periods match, otherwise adjust
-        if contract['payment_schedule'] == period_type or (
-            contract['payment_schedule'] == 'quarterly' and period_type == 'quarter'):
+        if contract['payment_schedule'] == period_type_normalized:
             return flat_rate
-        elif contract['payment_schedule'] == 'monthly' and period_type == 'quarter':
+        elif contract['payment_schedule'] == 'monthly' and period_type_normalized == 'quarterly':
             return flat_rate * 3
-        elif contract['payment_schedule'] == 'quarterly' and period_type == 'month':
+        elif contract['payment_schedule'] == 'quarterly' and period_type_normalized == 'monthly':
             return flat_rate / 3
-            
     # Handle percentage fee
     elif fee_type in ('percentage', 'percent'):
         percent_rate = contract['percent_rate']
         if percent_rate is None or total_assets is None:
             return None
-            
         # Apply percentage rate to assets
         # Note: percent_rate is already stored as a decimal in the database (e.g., 0.005 for 0.5%)
         decimal_rate = float(percent_rate)
-        
         # Apply rate based on period type
-        if contract['payment_schedule'] == period_type or (
-            contract['payment_schedule'] == 'quarterly' and period_type == 'quarter'):
+        if contract['payment_schedule'] == period_type_normalized:
             return total_assets * decimal_rate
-        elif contract['payment_schedule'] == 'monthly' and period_type == 'quarter':
+        elif contract['payment_schedule'] == 'monthly' and period_type_normalized == 'quarterly':
             return total_assets * decimal_rate * 3
-        elif contract['payment_schedule'] == 'quarterly' and period_type == 'month':
+        elif contract['payment_schedule'] == 'quarterly' and period_type_normalized == 'monthly':
             return total_assets * decimal_rate / 3
-    
     # Default case if calculation not possible
     return None
 

@@ -1,8 +1,5 @@
 "use client"
-
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { CalendarIcon, Paperclip, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,11 +63,38 @@ export function PaymentForm({
   const [isNotesOpen, setIsNotesOpen] = useState(!!formData.notes || !!formData.attachmentUrl)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [expectedFee, setExpectedFee] = useState<number | null>(null)
+  
+  const calculateExpectedFee = useCallback(async () => {
+    if (!contractId || (!formData.aum && !formData.periodValue)) return;
+    try {
+      if (formData.periodValue) {
+        const [periodValue, periodYear] = formData.periodValue.split('-');
+        const feeData = await paymentApi.calculateExpectedFee({
+          client_id: parseInt(clientId, 10),
+          contract_id: parseInt(contractId, 10),
+          total_assets: formData.aum ? parseInt(formData.aum, 10) : undefined,
+          period_type: isMonthly ? 'month' : 'quarter',
+          period: parseInt(periodValue, 10),
+          year: parseInt(periodYear, 10)
+        });
+        setExpectedFee(feeData.expected_fee !== undefined && feeData.expected_fee !== null ?
+          Number(feeData.expected_fee) : null);
+      }
+    } catch (error) {
+      console.error("Error calculating expected fee:", error);
+      setExpectedFee(null);
+    }
+  }, [clientId, contractId, formData.aum, formData.periodValue, isMonthly]);
 
-  // Fetch available periods when contractId changes
+  const debouncedCalculation = useCallback(() => {
+    const timeoutId = setTimeout(() => {
+      calculateExpectedFee();
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [calculateExpectedFee]);
+
   useEffect(() => {
     if (!contractId) return;
-
     const fetchPeriods = async () => {
       try {
         const periodsData = await paymentApi.getAvailablePeriods(parseInt(clientId, 10), parseInt(contractId, 10));
@@ -85,51 +109,21 @@ export function PaymentForm({
         });
       }
     };
-
     fetchPeriods();
   }, [clientId, contractId, toast]);
 
-  // Calculate expected fee when AUM or period changes
   useEffect(() => {
-    const calculateExpectedFee = async () => {
-      if (!contractId || (!formData.aum && !formData.periodValue)) return;
+    if (formData.aum && formData.periodValue) {
+      debouncedCalculation();
+    }
+  }, [formData.aum, formData.periodValue, debouncedCalculation]);
 
-      try {
-        // Only calculate if we have a period and/or AUM
-        if (formData.periodValue) {
-          const [periodValue, periodYear] = formData.periodValue.split('-');
-
-          const feeData = await paymentApi.calculateExpectedFee({
-            client_id: parseInt(clientId, 10),
-            contract_id: parseInt(contractId, 10),
-            total_assets: formData.aum ? parseInt(formData.aum, 10) : undefined,
-            period_type: isMonthly ? 'month' : 'quarter',
-            period: parseInt(periodValue, 10),
-            year: parseInt(periodYear, 10)
-          });
-
-          // Fix: Check for undefined and provide null as fallback
-          setExpectedFee(feeData.expected_fee !== undefined && feeData.expected_fee !== null ?
-            Number(feeData.expected_fee) : null);
-        }
-      } catch (error) {
-        console.error("Error calculating expected fee:", error);
-        setExpectedFee(null);
-      }
-    };
-
-    calculateExpectedFee();
-  }, [clientId, contractId, formData.aum, formData.periodValue, isMonthly]);
-
-  // Validate that endPeriod is after startPeriod if split payment
   useEffect(() => {
     if (isSplitPayment && formData.startPeriod && formData.endPeriod) {
       const [startPeriod, startYear] = formData.startPeriod.split('-').map(val => parseInt(val, 10));
       const [endPeriod, endYear] = formData.endPeriod.split('-').map(val => parseInt(val, 10));
-
       const startTotal = startYear * (isMonthly ? 12 : 4) + startPeriod;
       const endTotal = endYear * (isMonthly ? 12 : 4) + endPeriod;
-
       if (endTotal < startTotal) {
         setValidationError("End period cannot be before start period");
       } else {
@@ -145,12 +139,10 @@ export function PaymentForm({
     setFormData((prev) => ({ ...prev, [name]: value }))
     setHasChanges(true)
   }
-
+  
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
     setHasChanges(true)
-
-    // If changing periodValue, also update start/end periods for split payments
     if (name === "periodValue") {
       setFormData((prev) => ({
         ...prev,
@@ -159,7 +151,7 @@ export function PaymentForm({
       }));
     }
   }
-
+  
   const handleDateChange = (newDate: Date | undefined) => {
     setDate(newDate)
     if (newDate) {
@@ -167,30 +159,25 @@ export function PaymentForm({
       setHasChanges(true)
     }
   }
-
+  
   const handleSplitPaymentToggle = (checked: boolean) => {
     setIsSplitPayment(checked)
     setFormData((prev) => ({
       ...prev,
       appliedPeriod: checked ? "multiple" : "single",
-      // When toggling to single, set both start and end to the current periodValue
       ...(checked ? {} : { startPeriod: prev.periodValue, endPeriod: prev.periodValue })
     }))
     setHasChanges(true)
   }
-
+  
   const handleAttachFile = () => {
-    // Implement file attachment logic here
     console.log("File attachment triggered")
     setHasChanges(true)
   }
-
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (isSubmitting) return;
-
-    // First check for validation errors
     if (validationError) {
       toast({
         title: "Validation Error",
@@ -199,11 +186,8 @@ export function PaymentForm({
       });
       return;
     }
-
     setIsSubmitting(true);
-
     try {
-      // Validate form
       if (!formData.amount) {
         toast({
           title: "Validation Error",
@@ -213,7 +197,6 @@ export function PaymentForm({
         setIsSubmitting(false);
         return;
       }
-
       if (isSplitPayment && (!formData.startPeriod || !formData.endPeriod)) {
         toast({
           title: "Validation Error",
@@ -223,7 +206,6 @@ export function PaymentForm({
         setIsSubmitting(false);
         return;
       }
-
       if (!isSplitPayment && !formData.periodValue) {
         toast({
           title: "Validation Error",
@@ -233,10 +215,7 @@ export function PaymentForm({
         setIsSubmitting(false);
         return;
       }
-
-      // Submit form
       const success = await onSubmit(formData);
-
       if (success) {
         toast({
           title: isEditing ? "Payment Updated" : "Payment Created",
@@ -244,8 +223,6 @@ export function PaymentForm({
             ? "The payment has been successfully updated."
             : "A new payment has been successfully created.",
         });
-
-        // Reset form if not editing
         if (!isEditing) {
           handleClear();
         }
@@ -269,7 +246,7 @@ export function PaymentForm({
       setIsSubmitting(false);
     }
   }
-
+  
   const handleCancel = () => {
     if (hasChanges) {
       const confirmCancel = window.confirm("You have unsaved changes. Are you sure you want to cancel?");
@@ -277,13 +254,12 @@ export function PaymentForm({
     }
     onCancel();
   }
-
+  
   const handleClear = () => {
     if (hasChanges) {
       const confirmClear = window.confirm("This will clear all entered data. Continue?");
       if (!confirmClear) return;
     }
-
     setFormData({
       receivedDate: format(new Date(), "yyyy-MM-dd"),
       appliedPeriod: "single",
@@ -311,7 +287,6 @@ export function PaymentForm({
     );
   }
 
-  // Format the available periods for display
   const formattedPeriods = availablePeriods.map(period => ({
     ...period,
     formattedLabel: period.label
@@ -325,7 +300,6 @@ export function PaymentForm({
           <AlertDescription>{validationError}</AlertDescription>
         </Alert>
       )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="space-y-1.5">
           <Label htmlFor="receivedDate" className="text-sm font-medium">
@@ -346,7 +320,6 @@ export function PaymentForm({
             </PopoverContent>
           </Popover>
         </div>
-
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="appliedPeriod" className="text-sm font-medium">
@@ -415,7 +388,6 @@ export function PaymentForm({
           </div>
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div className="space-y-2">
           <Label htmlFor="aum" className="text-sm font-medium">
@@ -439,7 +411,6 @@ export function PaymentForm({
             </div>
           )}
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="amount" className="text-sm font-medium">
             Payment Amount
@@ -473,7 +444,6 @@ export function PaymentForm({
             </div>
           )}
         </div>
-
         <div className="space-y-2">
           <Label htmlFor="method" className="text-sm font-medium">
             Payment Method <span className="text-xs text-muted-foreground">(optional)</span>
@@ -508,8 +478,6 @@ export function PaymentForm({
           )}
         </div>
       </div>
-
-      {/* Period summary */}
       {(isSplitPayment && formData.startPeriod && formData.endPeriod) && (
         <div className="bg-gray-50 p-3 rounded-md text-sm">
           <h4 className="font-medium mb-1">Payment Summary</h4>
@@ -517,22 +485,17 @@ export function PaymentForm({
             {formData.amount && (
               <div>
                 {(() => {
-                  // Calculate number of periods
                   const [startPeriod, startYear] = formData.startPeriod.split('-').map(val => parseInt(val, 10));
                   const [endPeriod, endYear] = formData.endPeriod.split('-').map(val => parseInt(val, 10));
-
                   const startTotal = startYear * (isMonthly ? 12 : 4) + startPeriod;
                   const endTotal = endYear * (isMonthly ? 12 : 4) + endPeriod;
-
                   if (endTotal < startTotal) return "Invalid period range";
-
                   const periodCount = endTotal - startTotal + 1;
                   const amountPerPeriod = parseFloat(formData.amount as string) / periodCount;
-
                   return (
                     <>
                       <span>
-                        {formatPeriod(formData.startPeriod)} to {formatPeriod(formData.endPeriod)}
+                        {formatPeriod(formData.startPeriod, isMonthly)} to {formatPeriod(formData.endPeriod, isMonthly)}
                       </span>
                       <div>
                         {periodCount} {isMonthly ? 'months' : 'quarters'} × ${amountPerPeriod.toFixed(2)} = ${parseFloat(formData.amount as string).toFixed(2)}
@@ -545,10 +508,7 @@ export function PaymentForm({
           </div>
         </div>
       )}
-
-      {/* Modified layout to position buttons next to the notes section in a horizontal arrangement */}
       <div className="flex flex-col md:flex-row gap-5">
-        {/* Notes & Attachments section - takes up more space */}
         <div className="flex-1">
           <details className="group" open={isNotesOpen} onToggle={() => setIsNotesOpen(!isNotesOpen)}>
             <summary className="flex items-center cursor-pointer list-none">
@@ -597,8 +557,6 @@ export function PaymentForm({
             </div>
           </details>
         </div>
-
-        {/* Buttons section - horizontal layout */}
         <div className="md:flex md:items-end md:space-x-3 space-y-3 md:space-y-0">
           {isEditing && (
             <Button type="button" variant="outline" onClick={handleCancel}>
