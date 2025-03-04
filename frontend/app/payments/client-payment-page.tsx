@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import type { Payment } from "@/types"
+
 interface ClientPaymentPageProps {
   clientId: number
   complianceStatus: ComplianceStatus
@@ -24,6 +25,7 @@ interface ClientPaymentPageProps {
   toggleDocumentViewer: () => void
   documentViewerOpen: boolean
 }
+
 export function ClientPaymentPage({
   clientId,
   complianceStatus,
@@ -31,13 +33,14 @@ export function ClientPaymentPage({
   toggleDocumentViewer,
   documentViewerOpen,
 }: ClientPaymentPageProps) {
-    const {
+  const {
     clientSnapshot,
     feeSummary,
     isLoading: isClientLoading,
     error: clientError
   } = useClientSnapshot(clientId);
-    const {
+  
+  const {
     payments,
     isLoading: isPaymentsLoading,
     error: paymentsError,
@@ -47,37 +50,47 @@ export function ClientPaymentPage({
     deleteSplitPaymentGroup,
     refreshPayments
   } = usePayments(clientId);
-    const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
+  
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
   const [currentDocumentUrl, setCurrentDocumentUrl] = useState<string | null>(null);
-    const {
+  
+  const {
     payment: editingPayment,
     isLoading: isPaymentDetailLoading,
     error: paymentDetailError
   } = usePaymentDetails(editingPaymentId);
-    const uiClient = clientSnapshot ? mapClientSnapshotToUI(clientSnapshot, complianceStatus) : null;
+  
+  const uiClient = clientSnapshot ? mapClientSnapshotToUI(clientSnapshot, complianceStatus) : null;
   const uiPayments = payments.map(payment => mapPaymentToUI(payment));
-    // Find contract that matches this client's ID instead of assuming first one is correct
-    const activeContract = clientSnapshot?.contracts?.find(contract => contract.client_id === clientId) || clientSnapshot?.contracts?.[0] || null;
-    const handleEditPayment = (payment: Payment) => {
+  const activeContract = clientSnapshot?.contracts?.[0] || null;
+  
+  useEffect(() => {
+    setEditingPaymentId(null);
+  }, [clientId]);
+
+  const handleEditPayment = (payment: Payment) => {
     setEditingPaymentId(parseInt(payment.id, 10));
-        document.getElementById("payment-form-section")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("payment-form-section")?.scrollIntoView({ behavior: "smooth" });
   }
+  
   const handleCancelEdit = () => {
     setEditingPaymentId(null);
   }
+  
   const handleViewDocument = (documentUrl: string) => {
     setCurrentDocumentUrl(documentUrl);
     onViewDocument(documentUrl);
   }
-    const handleDeletePayment = async (paymentId: string) => {
+  
+  const handleDeletePayment = async (paymentId: string) => {
     try {
       const numericPaymentId = parseInt(paymentId, 10);
       const payment = uiPayments.find(p => p.id === paymentId);
       if (payment?.isSplitPayment && payment.splitGroupId) {
-                const result = await deleteSplitPaymentGroup(payment.splitGroupId);
+        const result = await deleteSplitPaymentGroup(payment.splitGroupId);
         return result;
       } else {
-                const result = await deletePayment(numericPaymentId);
+        const result = await deletePayment(numericPaymentId);
         return result;
       }
     } catch (error) {
@@ -85,7 +98,8 @@ export function ClientPaymentPage({
       return false;
     }
   };
-    const handleCreatePayment = async (formData: any) => {
+  
+  const handleCreatePayment = async (formData: any) => {
     try {
       const isSplitPayment = formData.appliedPeriod === "multiple";
       await createPayment({
@@ -102,13 +116,15 @@ export function ClientPaymentPage({
         end_period: isSplitPayment ? parseInt(formData.endPeriod?.split('-')[0], 10) : undefined,
         end_period_year: isSplitPayment ? parseInt(formData.endPeriod?.split('-')[1], 10) : undefined
       });
-            await refreshPayments();
+      
+      await refreshPayments();
       return true;
     } catch (error) {
       console.error("Error creating payment:", error);
       return false;
     }
   };
+  
   const handleUpdatePayment = async (formData: any) => {
     if (!editingPaymentId) return false;
     try {
@@ -119,15 +135,17 @@ export function ClientPaymentPage({
         method: formData.method,
         notes: formData.notes
       });
-            await refreshPayments();
-            setEditingPaymentId(null);
+      
+      await refreshPayments();
+      setEditingPaymentId(null);
       return true;
     } catch (error) {
       console.error("Error updating payment:", error);
       return false;
     }
   };
-    if (isClientLoading) {
+  
+  if (isClientLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between mb-6">
@@ -175,7 +193,8 @@ export function ClientPaymentPage({
       </div>
     );
   }
-    if (clientError || !clientSnapshot) {
+  
+  if (clientError || !clientSnapshot) {
     return (
       <Alert variant="destructive" className="mb-6">
         <AlertCircle className="h-4 w-4" />
@@ -185,6 +204,7 @@ export function ClientPaymentPage({
       </Alert>
     );
   }
+  
   return (
     <div className={`flex h-full ${documentViewerOpen ? "space-x-4" : ""}`}>
       <div className={`flex flex-col overflow-hidden ${documentViewerOpen ? "w-3/5" : "w-full"}`}>

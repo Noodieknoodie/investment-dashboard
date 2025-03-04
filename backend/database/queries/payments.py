@@ -7,17 +7,7 @@ from datetime import datetime
 import uuid
 
 def get_client_payments(client_id: int, limit: int = 20, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
-    """
-    Fetch payments for a client with pagination.
-    
-    Args:
-        client_id: Client ID to fetch payments for
-        limit: Number of records to return
-        offset: Offset for pagination
-        
-    Returns:
-        Tuple of (list of payment dictionaries, total count)
-    """
+
     # First check if client exists
     client_check_query = """
     SELECT client_id FROM clients WHERE client_id = ? AND valid_to IS NULL
@@ -81,15 +71,7 @@ def get_client_payments(client_id: int, limit: int = 20, offset: int = 0) -> Tup
     return payments, total
 
 def get_payment_by_id(payment_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Fetch a single payment by ID with client and contract details.
-    
-    Args:
-        payment_id: Payment ID to fetch
-        
-    Returns:
-        Payment dictionary or None if not found
-    """
+
     query = """
     SELECT 
         p.payment_id,
