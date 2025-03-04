@@ -16,6 +16,13 @@ export interface Client {
   contractNumber?: string
 }
 
+export type PaymentMethodType = "Check" | "ACH" | "Wire" | "Credit Card"
+
+export type PaymentPeriod = {
+  period: string;
+  amount?: number;
+}
+
 export interface Payment {
   id: string
   clientId: string
@@ -24,42 +31,31 @@ export interface Payment {
   status: 'pending' | 'completed' | 'failed' | 'Processed' | 'Pending'
   description?: string
   paymentMethod?: string
-  method?: string
+  method?: PaymentMethodType | string
   reference?: string
   notes?: string
   documentUrl?: string
+  period?: string
+  appliedPeriods?: PaymentPeriod[]
+  expectedFee?: number
+  // Added properties for split payments
+  isSplitPayment?: boolean
+  splitGroupId?: string
+  aum?: number
 }
 
 export interface PaymentFormData {
-  date: string
-  amount: number
-  method: "Check" | "ACH" | "Wire" | "Credit Card"
-  reference: string
-  notes?: string
-  documentUrl?: string
-}
-
-export type PaymentMethodType = "Check" | "ACH" | "Wire" | "Credit Card"
-
-export interface PaymentFormData {
-  date: string
-  amount: number
-  method: PaymentMethodType
+  date?: string
+  receivedDate: string
+  amount: number | string
+  method: PaymentMethodType | string
   reference?: string
   notes: string
   documentUrl?: string
-}
-
-export interface Payment {
-  id: string
-  clientId: string
-  amount: number
-  date: string
-  status: 'pending' | 'completed' | 'failed' | 'Processed' | 'Pending'
-  description?: string
-  paymentMethod?: string
-  method?: PaymentMethodType
-  reference?: string
-  notes?: string
-  documentUrl?: string
+  attachmentUrl?: string
+  appliedPeriod: string
+  periodValue: string
+  startPeriod: string
+  endPeriod: string
+  aum: string
 }

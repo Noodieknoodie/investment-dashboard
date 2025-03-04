@@ -1,7 +1,8 @@
 "use client"
 
-import DashboardLayout from "../dashboard-layout"
+import { redirect } from 'next/navigation'
 
-export default function SyntheticV0PageForDeployment() {
-  return <DashboardLayout />
+export default function Home() {
+  redirect('/payments')
+  return null
 }

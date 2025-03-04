@@ -13,15 +13,17 @@ router = APIRouter(
     responses={404: {"description": "Not found"}}
 )
 
-@router.get("/{client_id}")
+@router.get("/client/{client_id}")
 async def get_client_payments(
-    client_id: int,
+    client_id: int = Path(..., description="Client ID"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100)
 ):
     """Get paginated payment history for a client"""
     try:
         return payment_service.get_client_payments(client_id, page, page_size)
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -102,6 +104,8 @@ async def get_available_periods(client_id: int, contract_id: int):
     """Get available periods for payment entry based on contract"""
     try:
         return payment_service.get_available_periods(client_id, contract_id)
+    except HTTPException as e:
+        raise e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

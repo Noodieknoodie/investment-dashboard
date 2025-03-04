@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { ClientSidebar } from "./client-sidebar"
-import { TopNavigation } from "./top-navigation"
-import { ClientPaymentPage } from "./client-payment-page"
+import { ClientSidebar } from "./app/payments/client-sidebar"
+import { TopNavigation } from "./components/top-navigation"
+import { ClientPaymentPage } from "./app/payments/client-payment-page"
 import type { Client } from "./types"
 
 // Sample data
@@ -101,8 +101,12 @@ export default function DashboardLayout() {
         <main className="flex-1 overflow-hidden p-6">
           {selectedClient ? (
             <ClientPaymentPage
-              client={selectedClient}
-              allClients={sampleClients} // Pass all clients to get provider info
+              clientId={selectedClient.id ? parseInt(selectedClient.id) : 0}
+              complianceStatus={{ 
+                status: selectedClient.complianceStatus === "Compliant" ? "green" : 
+                         selectedClient.complianceStatus === "Review Needed" ? "yellow" : "red", 
+                reason: "" 
+              }}
               onViewDocument={viewDocument}
               toggleDocumentViewer={toggleDocumentViewer}
               documentViewerOpen={documentViewerOpen}

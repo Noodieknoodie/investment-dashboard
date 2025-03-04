@@ -18,6 +18,14 @@ def get_client_payments(client_id: int, limit: int = 20, offset: int = 0) -> Tup
     Returns:
         Tuple of (list of payment dictionaries, total count)
     """
+    # First check if client exists
+    client_check_query = """
+    SELECT client_id FROM clients WHERE client_id = ? AND valid_to IS NULL
+    """
+    client = execute_single_query(client_check_query, (client_id,))
+    if not client:
+        return [], 0
+        
     count_query = """
     SELECT COUNT(*) as total
     FROM payments
@@ -55,7 +63,7 @@ def get_client_payments(client_id: int, limit: int = 20, offset: int = 0) -> Tup
         payments p
     JOIN 
         clients c ON p.client_id = c.client_id
-    JOIN 
+    LEFT JOIN 
         contracts co ON p.contract_id = co.contract_id
     WHERE 
         p.client_id = ? AND
@@ -112,7 +120,7 @@ def get_payment_by_id(payment_id: int) -> Optional[Dict[str, Any]]:
         payments p
     JOIN 
         clients c ON p.client_id = c.client_id
-    JOIN 
+    LEFT JOIN 
         contracts co ON p.contract_id = co.contract_id
     WHERE 
         p.payment_id = ? AND
@@ -283,11 +291,16 @@ def create_split_payments(
                 'quarter_year': year
             })
     
-    # Calculate payment amount per period
+    # Calculate payment amount per period (with rounding to two decimal places)
     amount_per_period = round(actual_fee / num_periods, 2)
     
+    # Calculate expected fee per period if available
+    expected_fee_per_period = None
+    if expected_fee is not None:
+        expected_fee_per_period = round(expected_fee / num_periods, 2)
+    
     # Adjust the last period to account for rounding errors
-    last_period_adjustment = actual_fee - (amount_per_period * (num_periods - 1))
+    last_period_adjustment = round(actual_fee - (amount_per_period * (num_periods - 1)), 2)
     
     payment_ids = []
     
@@ -301,7 +314,7 @@ def create_split_payments(
             client_id=client_id,
             received_date=received_date,
             total_assets=total_assets,
-            expected_fee=expected_fee / num_periods if expected_fee else None,
+            expected_fee=expected_fee_per_period,
             actual_fee=period_amount,
             method=method,
             notes=notes,
@@ -377,6 +390,26 @@ def update_payment(
     """
     
     rows_updated = execute_update(query, tuple(params))
+    return rows_updated > 0
+
+def update_expected_fee(payment_id: int, expected_fee: float) -> bool:
+    """
+    Update the expected fee for a payment.
+    
+    Args:
+        payment_id: ID of payment to update
+        expected_fee: New expected fee
+        
+    Returns:
+        True if update successful, False otherwise
+    """
+    query = """
+    UPDATE payments
+    SET expected_fee = ?
+    WHERE payment_id = ? AND valid_to IS NULL
+    """
+    
+    rows_updated = execute_update(query, (expected_fee, payment_id))
     return rows_updated > 0
 
 def delete_payment(payment_id: int) -> bool:
@@ -494,8 +527,8 @@ def calculate_expected_fee(contract_id: int, total_assets: Optional[int], period
             return None
             
         # Apply percentage rate to assets
-        # Convert percentage to decimal (e.g., 0.5% becomes 0.005)
-        decimal_rate = float(percent_rate) / 100.0
+        # Note: percent_rate is already stored as a decimal in the database (e.g., 0.005 for 0.5%)
+        decimal_rate = float(percent_rate)
         
         # Apply rate based on period type
         if contract['payment_schedule'] == period_type or (

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import { Bell, ChevronDown, Search, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,15 +14,27 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function TopNavigation() {
+  const pathname = usePathname()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("payments")
 
+  // Set active tab based on current path
+  useEffect(() => {
+    const path = pathname.split("/")[1] || "payments"
+    setActiveTab(path)
+  }, [pathname])
+
   const tabs = [
-    { id: "payments", label: "PAYMENTS" },
-    { id: "summary", label: "SUMMARY" },
-    { id: "contacts", label: "CONTACTS" },
-    { id: "contracts", label: "CONTRACTS" },
-    { id: "export", label: "EXPORT DATA" },
+    { id: "payments", label: "PAYMENTS", path: "/payments" },
+    { id: "summary", label: "SUMMARY", path: "/summary" },
+    { id: "contacts", label: "CONTACTS", path: "/contacts" },
+    { id: "contracts", label: "CONTRACTS", path: "/contracts" },
+    { id: "export", label: "EXPORT DATA", path: "/export" },
   ]
+
+  const handleTabClick = (path: string) => {
+    router.push(path)
+  }
 
   return (
     <header className="border-b border-gray-200 bg-white">
@@ -39,7 +52,7 @@ export function TopNavigation() {
                     ? "bg-primary text-primary-foreground"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabClick(tab.path)}
               >
                 {tab.label}
               </Button>
@@ -86,7 +99,7 @@ export function TopNavigation() {
               className={`rounded-none px-4 py-2 ${
                 activeTab === tab.id ? "border-b-2 border-primary text-primary" : "text-gray-600"
               }`}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabClick(tab.path)}
             >
               {tab.label}
             </Button>

@@ -1,14 +1,14 @@
 # backend/services/payment_service.py
 # Payment calculation, validation
 
-
-
 from database.queries import payments as payment_queries
 from database.queries import clients as client_queries
 from models.schemas import Payment, PaymentCreate, PaymentUpdate, PaymentWithDetails, PaginatedResponse
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, date
 import uuid
+import re
+from fastapi import HTTPException
 
 def get_client_payments(client_id: int, page: int = 1, page_size: int = 20) -> PaginatedResponse:
     """
@@ -22,6 +22,11 @@ def get_client_payments(client_id: int, page: int = 1, page_size: int = 20) -> P
     Returns:
         PaginatedResponse with payment items
     """
+    # Check if client exists
+    client = client_queries.get_client_by_id(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
     # Calculate offset
     offset = (page - 1) * page_size
     
@@ -79,11 +84,11 @@ def create_payment(payment_data: PaymentCreate) -> Dict[str, Any]:
     
     # Determine if monthly or quarterly schedule
     is_monthly = contract['payment_schedule'].lower() == 'monthly'
+    period_type = 'month' if is_monthly else 'quarter'
     
     # Calculate expected fee if assets provided
     expected_fee = None
     if payment_data.total_assets is not None:
-        period_type = 'month' if is_monthly else 'quarter'
         expected_fee = payment_queries.calculate_expected_fee(
             payment_data.contract_id, 
             payment_data.total_assets, 
@@ -95,6 +100,13 @@ def create_payment(payment_data: PaymentCreate) -> Dict[str, Any]:
         # Validate end period is provided
         if payment_data.end_period is None or payment_data.end_period_year is None:
             raise ValueError("End period is required for split payments")
+        
+        # Validate end period is not before start period
+        start_total = payment_data.start_period_year * (12 if is_monthly else 4) + payment_data.start_period
+        end_total = payment_data.end_period_year * (12 if is_monthly else 4) + payment_data.end_period
+        
+        if end_total < start_total:
+            raise ValueError("End period cannot be before start period")
         
         # Create split payments
         payment_ids = payment_queries.create_split_payments(
@@ -117,7 +129,8 @@ def create_payment(payment_data: PaymentCreate) -> Dict[str, Any]:
             "success": True,
             "payment_ids": payment_ids,
             "is_split": True,
-            "split_count": len(payment_ids)
+            "split_count": len(payment_ids),
+            "split_group_id": payment_queries.get_payment_by_id(payment_ids[0]).get('split_group_id') if payment_ids else None
         }
     else:
         # Create a single payment
@@ -180,6 +193,20 @@ def update_payment(payment_id: int, payment_data: PaymentUpdate) -> Dict[str, An
     Returns:
         Dictionary with update status
     """
+    # First check if payment exists
+    existing_payment = payment_queries.get_payment_by_id(payment_id)
+    if not existing_payment:
+        return {"success": False, "message": "Payment not found"}
+    
+    # Check if this is part of a split payment group
+    if existing_payment.get('split_group_id'):
+        return {
+            "success": False, 
+            "requires_confirmation": True,
+            "message": "This payment is part of a split payment group. Editing one payment will affect the whole group.",
+            "split_group_id": existing_payment['split_group_id']
+        }
+    
     # Convert Decimal to float for database
     actual_fee = float(payment_data.actual_fee) if payment_data.actual_fee is not None else None
     
@@ -195,6 +222,26 @@ def update_payment(payment_id: int, payment_data: PaymentUpdate) -> Dict[str, An
     
     if not success:
         return {"success": False, "message": "Payment not found or no changes made"}
+    
+    # Recalculate expected fee if assets changed
+    if payment_data.total_assets is not None:
+        # Get contract and payment details
+        payment = payment_queries.get_payment_by_id(payment_id)
+        if payment:
+            # Determine period type
+            is_monthly = payment.get('applied_start_month') is not None
+            period_type = 'month' if is_monthly else 'quarter'
+            
+            # Calculate new expected fee
+            expected_fee = payment_queries.calculate_expected_fee(
+                payment['contract_id'], 
+                payment_data.total_assets, 
+                period_type
+            )
+            
+            # Update expected fee
+            if expected_fee is not None:
+                payment_queries.update_expected_fee(payment_id, expected_fee)
     
     return {"success": True, "payment_id": payment_id}
 
@@ -215,11 +262,13 @@ def delete_payment(payment_id: int) -> Dict[str, Any]:
     
     # If part of split payment group, ask if user wants to delete all related payments
     if payment.get('split_group_id'):
+        split_payments = payment_queries.get_split_payment_group(payment['split_group_id'])
         return {
             "success": False,
             "requires_confirmation": True,
-            "message": "This payment is part of a split payment. Do you want to delete all related payments?",
-            "split_group_id": payment['split_group_id']
+            "message": f"This payment is part of a split payment group with {len(split_payments)} payments. Do you want to delete all related payments?",
+            "split_group_id": payment['split_group_id'],
+            "split_count": len(split_payments)
         }
     
     # Delete single payment
@@ -304,16 +353,25 @@ def calculate_expected_fee(
     # Get fee type
     fee_type = contract['fee_type'].lower() if contract['fee_type'] else None
     
+    # If total_assets not provided but fee type is percentage, try to get latest AUM
+    if total_assets is None and fee_type in ('percentage', 'percent'):
+        metrics = client_queries.get_client_metrics(client_id)
+        if metrics and metrics.get('last_recorded_assets'):
+            total_assets = int(metrics['last_recorded_assets'])
+    
     # Calculate expected fee
     expected_fee = payment_queries.calculate_expected_fee(contract_id, total_assets, period_type)
     
     # Determine calculation method
     if fee_type == 'flat':
-        calculation_method = "Flat fee"
+        flat_rate = contract['flat_rate']
+        period_label = "monthly" if period_type == "month" else "quarterly"
+        calculation_method = f"Flat fee ({period_label}): ${flat_rate:,.2f}"
     elif fee_type in ('percentage', 'percent'):
         if total_assets is not None:
             rate = contract['percent_rate']
-            calculation_method = f"{rate}% of ${total_assets:,}"
+            rate_percentage = float(rate) * 100
+            calculation_method = f"{rate_percentage:.3f}% of ${total_assets:,}"
         else:
             calculation_method = "Percentage fee (assets not provided)"
     else:
@@ -336,15 +394,25 @@ def get_available_periods(client_id: int, contract_id: int) -> Dict[str, Any]:
     Returns:
         Dictionary with available periods
     """
-    # Get client and contract
-    client_data = client_queries.get_client_with_contracts(client_id)
-    if not client_data or not client_data['contracts']:
-        raise ValueError("Client or contract not found")
+    # Check if client exists
+    client = client_queries.get_client_by_id(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
     
-    # Find contract matching contract_id
-    contract = next((c for c in client_data['contracts'] if c['contract_id'] == contract_id), None)
+    # Check if contract exists and belongs to this client
+    contract_query = """
+        SELECT 
+            contract_id, client_id, contract_number, provider_name,
+            contract_start_date, fee_type, percent_rate, flat_rate,
+            payment_schedule, num_people, notes
+        FROM contracts
+        WHERE contract_id = ? AND client_id = ? AND valid_to IS NULL
+    """
+    from database.connection import execute_single_query
+    contract = execute_single_query(contract_query, (contract_id, client_id))
+    
     if not contract:
-        raise ValueError(f"Contract {contract_id} not found for client {client_id}")
+        raise HTTPException(status_code=400, detail=f"Contract {contract_id} not found for client {client_id}")
     
     # Determine if monthly or quarterly
     is_monthly = contract['payment_schedule'].lower() == 'monthly'
@@ -356,26 +424,29 @@ def get_available_periods(client_id: int, contract_id: int) -> Dict[str, Any]:
         contract_start = f"{datetime.now().year}-01-01"
     
     try:
-        start_date = datetime.strptime(contract_start, '%Y-%m-%d').date()
+        # Try to parse the date
+        start_date = datetime.strptime(contract_start, "%Y-%m-%d")
     except ValueError:
-        # Handle potential malformed dates in the database
-        start_date = date(datetime.now().year, 1, 1)
+        # If date format is invalid, try another common format
+        try:
+            start_date = datetime.strptime(contract_start, "%Y-%m-%d")
+        except ValueError:
+            # If still invalid, use default
+            start_date = datetime(datetime.now().year, 1, 1)
     
-    # Get current date for determining latest available period
-    current_date = date.today()
-    
-    # Calculate available periods
+    # Calculate available periods based on contract start and current date
+    current_date = datetime.now()
     periods = []
     
     if is_monthly:
         # For monthly payments, generate from contract start to current month - 1
-        # Starting month
+        # Calculate starting month
         start_year = start_date.year
         start_month = start_date.month
         
-        # Current month (with 1 month behind for arrears)
+        # Calculate current month (with 1 month behind for arrears)
         current_year = current_date.year
-        current_month = current_date.month - 1
+        current_month = current_date.month - 1  # One month behind
         if current_month < 1:
             current_month = 12
             current_year -= 1
@@ -384,6 +455,12 @@ def get_available_periods(client_id: int, contract_id: int) -> Dict[str, Any]:
         total_start_months = start_year * 12 + start_month
         total_current_months = current_year * 12 + current_month
         
+        # Month names for formatting
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        
         for total_month in range(total_start_months, total_current_months + 1):
             year = total_month // 12
             month = total_month % 12
@@ -391,7 +468,7 @@ def get_available_periods(client_id: int, contract_id: int) -> Dict[str, Any]:
                 month = 12
                 year -= 1
                 
-            period_label = f"{month:02d}/{year}"
+            period_label = f"{month_names[month-1]} {year}"
             periods.append({
                 "label": period_label,
                 "value": {
@@ -423,7 +500,7 @@ def get_available_periods(client_id: int, contract_id: int) -> Dict[str, Any]:
                 quarter = 4
                 year -= 1
                 
-            period_label = f"Q{quarter}/{year}"
+            period_label = f"Q{quarter} {year}"
             periods.append({
                 "label": period_label,
                 "value": {
@@ -432,8 +509,58 @@ def get_available_periods(client_id: int, contract_id: int) -> Dict[str, Any]:
                 }
             })
     
+    # Make sure we return at least one period
+    if not periods:
+        # Add current period as fallback
+        if is_monthly:
+            month = current_date.month
+            periods.append({
+                "label": f"{month_names[month-1]} {current_date.year}",
+                "value": {
+                    "month": month,
+                    "year": current_date.year
+                }
+            })
+        else:
+            current_quarter = (current_date.month - 1) // 3 + 1
+            periods.append({
+                "label": f"Q{current_quarter} {current_date.year}",
+                "value": {
+                    "quarter": current_quarter,
+                    "year": current_date.year
+                }
+            })
+    
+    # Sort periods chronologically (newest first)
+    periods.reverse()
+    
     return {
         "is_monthly": is_monthly,
         "periods": periods,
         "contract_start_date": contract_start
     }
+
+def format_period_label(is_monthly: bool, period: int, year: int) -> str:
+    """
+    Format a period for display.
+    
+    Args:
+        is_monthly: Whether this is a monthly period
+        period: Month (1-12) or quarter (1-4) number
+        year: Year
+        
+    Returns:
+        Formatted period string
+    """
+    if is_monthly:
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        if 1 <= period <= 12:
+            return f"{month_names[period-1]} {year}"
+        return f"Month {period} {year}"
+    else:
+        if 1 <= period <= 4:
+            return f"Q{period} {year}"
+        return f"Quarter {period} {year}"

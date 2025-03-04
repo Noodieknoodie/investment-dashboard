@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Search, Building, UserCheck, UserX, UserCog } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
-import type { Client } from "./types"
+import type { Client } from "../../types"
 
 interface ClientSidebarProps {
   clients: Client[]
@@ -19,25 +19,20 @@ export function ClientSidebar({ clients, selectedClient, onSelectClient }: Clien
   const [isProviderView, setIsProviderView] = useState(false)
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
 
-  const filteredClients = clients.filter((client) => client.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredClients = useMemo(() =>
+    clients.filter((client) =>
+      client.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [clients, searchQuery]
+  );
 
-  const providers = Array.from(new Set(clients.map((client) => client.planProvider)))
+  const providers = useMemo(() =>
+    Array.from(new Set(clients.map((client) => client.planProvider))),
+    [clients]
+  );
 
   const toggleProvider = (provider: string) => {
     setExpandedProvider(expandedProvider === provider ? null : provider)
-  }
-
-  const getComplianceIcon = (status: string) => {
-    switch (status) {
-      case "Compliant":
-        return <UserCheck className="h-4 w-4 text-green-500" />
-      case "Review Needed":
-        return <UserCog className="h-4 w-4 text-yellow-500" />
-      case "Payment Overdue":
-        return <UserX className="h-4 w-4 text-red-500" />
-      default:
-        return <UserCheck className="h-4 w-4 text-gray-400" />
-    }
   }
 
   return (
@@ -70,39 +65,39 @@ export function ClientSidebar({ clients, selectedClient, onSelectClient }: Clien
         <div className="p-2">
           {isProviderView
             ? providers.map((provider) => (
-                <div key={provider} className="mb-2">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between py-2 px-3 hover:bg-gray-100"
-                    onClick={() => toggleProvider(provider)}
-                  >
-                    <span className="font-medium">{provider}</span>
-                    <Building className="h-4 w-4 text-gray-500" />
-                  </Button>
-                  {expandedProvider === provider && (
-                    <div className="ml-4 mt-1">
-                      {filteredClients
-                        .filter((client) => client.planProvider === provider)
-                        .map((client) => (
-                          <ClientButton
-                            key={client.id}
-                            client={client}
-                            isSelected={selectedClient?.id === client.id}
-                            onClick={() => onSelectClient(client)}
-                          />
-                        ))}
-                    </div>
-                  )}
-                </div>
-              ))
+              <div key={provider} className="mb-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between py-2 px-3 hover:bg-gray-100"
+                  onClick={() => toggleProvider(provider)}
+                >
+                  <span className="font-medium">{provider}</span>
+                  <Building className="h-4 w-4 text-gray-500" />
+                </Button>
+                {expandedProvider === provider && (
+                  <div className="ml-4 mt-1">
+                    {filteredClients
+                      .filter((client) => client.planProvider === provider)
+                      .map((client) => (
+                        <ClientButton
+                          key={client.id}
+                          client={client}
+                          isSelected={selectedClient?.id === client.id}
+                          onClick={() => onSelectClient(client)}
+                        />
+                      ))}
+                  </div>
+                )}
+              </div>
+            ))
             : filteredClients.map((client) => (
-                <ClientButton
-                  key={client.id}
-                  client={client}
-                  isSelected={selectedClient?.id === client.id}
-                  onClick={() => onSelectClient(client)}
-                />
-              ))}
+              <ClientButton
+                key={client.id}
+                client={client}
+                isSelected={selectedClient?.id === client.id}
+                onClick={() => onSelectClient(client)}
+              />
+            ))}
         </div>
       </ScrollArea>
     </div>
@@ -142,4 +137,3 @@ function ClientButton({ client, isSelected, onClick }: ClientButtonProps) {
     </Button>
   )
 }
-

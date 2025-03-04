@@ -38,35 +38,55 @@ def get_clients_by_provider() -> List[Dict[str, Any]]:
     return result
 
 def get_client_snapshot(client_id: int) -> Optional[ClientSnapshot]:
-
-    # Get client and contract data
-    client_data = client_queries.get_client_with_contracts(client_id)
-    if not client_data:
-        return None
-    
-    # Get metrics data
-    metrics_data = client_queries.get_client_metrics(client_id)
-    
-    # Extract client and contracts
-    client = Client(
-        client_id=client_data['client_id'],
-        display_name=client_data['display_name'],
-        full_name=client_data['full_name'],
-        ima_signed_date=client_data['ima_signed_date'],
-        onedrive_folder_path=client_data['onedrive_folder_path']
-    )
-    
-    contracts = [Contract(**contract) for contract in client_data['contracts']]
-    
-    # Create metrics if available
-    metrics = ClientMetrics(**metrics_data) if metrics_data else None
-    
-    # Create and return snapshot
-    return ClientSnapshot(
-        client=client,
-        contracts=contracts,
-        metrics=metrics
-    )
+    try:
+        # Get client and contract data
+        client_data = client_queries.get_client_with_contracts(client_id)
+        if not client_data:
+            print(f"No client found with ID: {client_id}")
+            return None
+        
+        # Get metrics data
+        metrics_data = client_queries.get_client_metrics(client_id)
+        
+        # Extract client and contracts
+        client = Client(
+            client_id=client_data['client_id'],
+            display_name=client_data['display_name'],
+            full_name=client_data['full_name'],
+            ima_signed_date=client_data['ima_signed_date'],
+            onedrive_folder_path=client_data['onedrive_folder_path']
+        )
+        
+        # Handle the case where there are no contracts
+        if not client_data.get('contracts'):
+            print(f"No contracts found for client ID: {client_id}")
+            contracts = []
+        else:
+            contracts = [Contract(**contract) for contract in client_data['contracts']]
+        
+        # Create metrics if available
+        metrics = ClientMetrics(**metrics_data) if metrics_data else None
+        
+        # Create and return snapshot
+        return ClientSnapshot(
+            client=client,
+            contracts=contracts,
+            metrics=metrics
+        )
+    except Exception as e:
+        print(f"Error getting client snapshot for client ID {client_id}: {str(e)}")
+        # Return a minimal valid snapshot instead of None to avoid frontend errors
+        return ClientSnapshot(
+            client=Client(
+                client_id=client_id,
+                display_name="Client data error",
+                full_name="Error loading client data",
+                ima_signed_date=None,
+                onedrive_folder_path=None
+            ),
+            contracts=[],
+            metrics=None
+        )
 
 def get_client_compliance_status(client_id: int) -> Dict[str, str]:
 
@@ -134,7 +154,8 @@ def calculate_fee_summary(client_id: int) -> Dict[str, Any]:
             }
         
         last_assets = metrics_data['last_recorded_assets']
-        decimal_rate = float(percent_rate) / 100.0
+        # Note: percent_rate is already stored as a decimal percentage in the database (e.g., 0.005 for 0.5%)
+        decimal_rate = float(percent_rate)
         
         # Calculate fees based on schedule and rate
         if contract['payment_schedule'] == 'monthly':

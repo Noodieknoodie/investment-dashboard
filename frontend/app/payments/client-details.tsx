@@ -1,28 +1,38 @@
 import { CalendarClock, CreditCard, AlertTriangle, CheckCircle, Clock, FileText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { Client } from "./types"
+import type { Client } from "../../types"
+import { FeeSummary } from "@/lib/api"
 
 interface ClientDetailsProps {
   client: Client
+  feeSummary?: FeeSummary | null
 }
 
-export function ClientDetails({ client }: ClientDetailsProps) {
-  // Calculate expected fee
-  const expectedFee =
-    client.feeStructure === "Flat Rate"
-      ? client.feeAmount
+export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
+  // Calculate expected fee (using fee summary if available)
+  const expectedFee = feeSummary
+    ? (client.paymentFrequency === "Monthly" ? feeSummary.monthly : feeSummary.quarterly) || 0
+    : client.feeStructure === "Flat Rate"
+      ? client.feeAmount || 0
       : client.aum && client.feePercentage
         ? (client.aum * (client.feePercentage / 100)) / (client.paymentFrequency === "Monthly" ? 12 : 4)
         : 0
 
   // Format date
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+    } catch (e) {
+      return "Invalid date";
+    }
   }
 
   // Calculate next payment date
   const calculateNextPaymentDate = () => {
+    if (!client.lastPayment) return new Date();
+
     const lastPaymentDate = new Date(client.lastPayment)
     if (client.paymentFrequency === "Monthly") {
       return new Date(lastPaymentDate.setMonth(lastPaymentDate.getMonth() + 1))
@@ -63,12 +73,12 @@ export function ClientDetails({ client }: ClientDetailsProps) {
             {client.feeStructure === "Flat Rate" ? (
               <div className="flex justify-between py-1">
                 <dt className="text-gray-500">Fee Amount</dt>
-                <dd className="font-medium text-gray-900">${client.feeAmount?.toLocaleString()}</dd>
+                <dd className="font-medium text-gray-900">${client.feeAmount?.toLocaleString() || "N/A"}</dd>
               </div>
             ) : (
               <div className="flex justify-between py-1">
                 <dt className="text-gray-500">Fee Percentage</dt>
-                <dd className="font-medium text-gray-900">{client.feePercentage}%</dd>
+                <dd className="font-medium text-gray-900">{client.feePercentage?.toFixed(2) || "N/A"}%</dd>
               </div>
             )}
           </dl>
@@ -83,7 +93,7 @@ export function ClientDetails({ client }: ClientDetailsProps) {
           <dl className="grid grid-cols-1 gap-1 text-sm">
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">AUM</dt>
-              <dd className="font-medium text-gray-900">${client.aum?.toLocaleString()}</dd>
+              <dd className="font-medium text-gray-900">${client.aum?.toLocaleString() || "N/A"}</dd>
             </div>
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">Expected Fee</dt>
@@ -93,13 +103,12 @@ export function ClientDetails({ client }: ClientDetailsProps) {
             </div>
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">Last Payment</dt>
-              <dd className="font-medium text-gray-900">{formatDate(client.lastPayment)}</dd>
+              <dd className="font-medium text-gray-900">{client.lastPayment ? formatDate(client.lastPayment) : "N/A"}</dd>
             </div>
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">Last Payment Amount</dt>
               <dd className="font-medium text-gray-900">
-                $
-                {client.lastPaymentAmount.toLocaleString(undefined, {
+                ${client.lastPaymentAmount.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
@@ -134,13 +143,12 @@ export function ClientDetails({ client }: ClientDetailsProps) {
                   <AlertTriangle className="h-5 w-5 text-red-500" />
                 )}
                 <span
-                  className={`font-medium ${
-                    client.complianceStatus === "Compliant"
+                  className={`font-medium ${client.complianceStatus === "Compliant"
                       ? "text-green-700"
                       : client.complianceStatus === "Review Needed"
                         ? "text-yellow-700"
                         : "text-red-700"
-                  }`}
+                    }`}
                 >
                   {client.complianceStatus}
                 </span>
@@ -157,8 +165,9 @@ export function ClientDetails({ client }: ClientDetailsProps) {
                   <CreditCard className="h-4 w-4 text-gray-400" />
                   <span className="text-sm text-gray-600">
                     {client.feeStructure === "Flat Rate"
-                      ? `Flat fee of $${client.feeAmount?.toLocaleString()}`
-                      : `${client.feePercentage}% of AUM ($${client.aum?.toLocaleString()})`}
+                      ? `Flat fee of $${client.feeAmount?.toLocaleString() || "N/A"}`
+                      // Convert decimal percent to percentage display (e.g., 0.005 to 0.5%)
+                      : `${((client.feePercentage || 0) * 100).toFixed(2)}% of AUM ($${client.aum?.toLocaleString() || "N/A"})`}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -169,43 +178,77 @@ export function ClientDetails({ client }: ClientDetailsProps) {
                 </div>
               </div>
             </div>
-            
+
             {/* Right column - fee reference (stacked) */}
             <div className="md:w-2/5">
               <div className="bg-gray-50 rounded-md p-3">
                 <h4 className="text-xs font-medium text-gray-500 mb-2">Fee Reference</h4>
                 <div className="grid grid-cols-1 gap-2 text-xs">
-                  {client.feeStructure === "Percentage of AUM" ? (
-                    <>
-                      <div>
-                        <span className="text-gray-500">Monthly:</span>
-                        <span className="font-medium ml-1">{(client.feePercentage! / 12).toFixed(3)}%</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Quarterly:</span>
-                        <span className="font-medium ml-1">{(client.feePercentage! / 4).toFixed(3)}%</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Annually:</span>
-                        <span className="font-medium ml-1">{client.feePercentage}%</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <span className="text-gray-500">Monthly:</span>
-                        <span className="font-medium ml-1">${(client.feeAmount! / 12).toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Quarterly:</span>
-                        <span className="font-medium ml-1">${(client.feeAmount! / 4).toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Annually:</span>
-                        <span className="font-medium ml-1">${client.feeAmount!.toFixed(2)}</span>
-                      </div>
-                    </>
-                  )}
+                  {feeSummary && (
+                    client.feeStructure === "Percentage of AUM" ? (
+                      <>
+                        <div>
+                          <span className="text-gray-500">Monthly:</span>
+                          <span className="font-medium ml-1">${feeSummary.monthly?.toFixed(2) || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Quarterly:</span>
+                          <span className="font-medium ml-1">${feeSummary.quarterly?.toFixed(2) || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Annually:</span>
+                          <span className="font-medium ml-1">${feeSummary.annual?.toFixed(2) || "N/A"}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="text-gray-500">Monthly:</span>
+                          <span className="font-medium ml-1">${feeSummary.monthly?.toFixed(2) || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Quarterly:</span>
+                          <span className="font-medium ml-1">${feeSummary.quarterly?.toFixed(2) || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Annually:</span>
+                          <span className="font-medium ml-1">${feeSummary.annual?.toFixed(2) || "N/A"}</span>
+                        </div>
+                      </>
+                    )
+                  ) || (
+                      client.feeStructure === "Percentage of AUM" ? (
+                        <>
+                          <div>
+                            <span className="text-gray-500">Monthly:</span>
+                            <span className="font-medium ml-1">{((client.feePercentage || 0) * 100 / 12).toFixed(3)}%</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Quarterly:</span>
+                            <span className="font-medium ml-1">{((client.feePercentage || 0) * 100 / 4).toFixed(3)}%</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Annually:</span>
+                            <span className="font-medium ml-1">{((client.feePercentage || 0) * 100).toFixed(2)}%</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="text-gray-500">Monthly:</span>
+                            <span className="font-medium ml-1">${(client.feeAmount! / 12).toFixed(2) || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Quarterly:</span>
+                            <span className="font-medium ml-1">${(client.feeAmount! / 4).toFixed(2) || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Annually:</span>
+                            <span className="font-medium ml-1">${client.feeAmount?.toFixed(2) || "N/A"}</span>
+                          </div>
+                        </>
+                      )
+                    )}
                 </div>
               </div>
             </div>
@@ -215,4 +258,3 @@ export function ClientDetails({ client }: ClientDetailsProps) {
     </>
   )
 }
-
