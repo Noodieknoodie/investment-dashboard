@@ -117,6 +117,12 @@ export function PaymentHistory({
     )
   }
 
+  // Use different thresholds to determine how to display fee differences
+  // - Exact match: Blue (extremely rare in percentage-based fees)
+  // - Within 5% difference: Green with checkmark (acceptable variance)
+  // - Within 5-15% difference: Yellow (borderline acceptable)
+  // - Beyond 15% difference: Red (significant variance that needs attention)
+  
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -148,7 +154,7 @@ export function PaymentHistory({
               <TableHead>Fee Structure</TableHead>
               <TableHead>Expected Fee</TableHead>
               <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Remainder</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -164,6 +170,7 @@ export function PaymentHistory({
                 <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                 <TableCell className="text-right"><Skeleton className="h-8 w-8 rounded-full ml-auto" /></TableCell>
               </TableRow>
             ))}
@@ -188,7 +195,7 @@ export function PaymentHistory({
               <TableHead>Fee Structure</TableHead>
               <TableHead>Expected Fee</TableHead>
               <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Remainder</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -266,16 +273,52 @@ export function PaymentHistory({
                         )}
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${payment.status === "Processed"
-                            ? "bg-green-100 text-green-800"
-                            : payment.status === "Pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-red-100 text-red-800"
-                            }`}
-                        >
-                          {payment.status}
-                        </span>
+                        {(() => {
+                          // Use the same expected fee calculation as in the expected fee column
+                          const effectiveExpectedFee = payment.expectedFee !== undefined && payment.expectedFee !== null
+                            ? payment.expectedFee
+                            : payment.aum && client?.feePercentage
+                              ? payment.aum * (client.feePercentage / 100)
+                              : null;
+                          
+                          if (effectiveExpectedFee === null) {
+                            return (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                Cannot calculate
+                              </span>
+                            );
+                          }
+                          
+                          const difference = payment.amount - effectiveExpectedFee;
+                          const percentDifference = (difference / effectiveExpectedFee) * 100;
+                          const absPercentDifference = Math.abs(percentDifference);
+                          
+                          // Determine style based on difference percentage
+                          const badgeClass = payment.amount === effectiveExpectedFee
+                            ? "bg-blue-100 text-blue-800"
+                            : absPercentDifference <= 5
+                              ? "bg-green-100 text-green-800"
+                              : absPercentDifference <= 15
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800";
+                          
+                          return (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+                              {payment.amount === effectiveExpectedFee
+                                ? "Exact Match"
+                                : payment.amount > effectiveExpectedFee
+                                  ? `+${formatCurrency(difference)}`
+                                  : `-${formatCurrency(Math.abs(difference))}`
+                              }
+                              {effectiveExpectedFee > 0 && payment.amount !== effectiveExpectedFee && (
+                                <span className="ml-1">
+                                  ({absPercentDifference.toFixed(1)}%)
+                                  {absPercentDifference <= 5 && payment.amount !== effectiveExpectedFee && " ✓"}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -321,7 +364,10 @@ export function PaymentHistory({
                         <TableCell className="text-sm font-medium text-gray-700">
                           {periodData.amount !== undefined ? formatCurrency(periodData.amount) : '-'}
                         </TableCell>
-                        <TableCell></TableCell>
+                        <TableCell>
+                          {/* No remainder calculation needed for individual split payment periods */}
+                          <span className="text-xs text-gray-500">Part of split</span>
+                        </TableCell>
                         <TableCell></TableCell>
                       </TableRow>
                     ))}

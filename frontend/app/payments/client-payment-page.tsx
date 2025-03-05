@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import type { Payment } from "@/types"
+import { toast } from "@/components/ui/use-toast"
 
 interface ClientPaymentPageProps {
   clientId: number
@@ -174,6 +175,59 @@ export function ClientPaymentPage({
 
   const handleUpdatePayment = async (formData: any) => {
     if (!editingPaymentId) return false;
+
+    // Check if they're trying to change split payment settings
+    const isCurrentlySplit = editingPayment?.is_split_payment;
+    const wantsToBeSplit = formData.appliedPeriod === "multiple";
+    
+    // Check if they're trying to change periods
+    const currentStartPeriod = editingPayment?.applied_start_quarter 
+      ? `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`
+      : editingPayment?.applied_start_month 
+        ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}` 
+        : "";
+    
+    const currentEndPeriod = editingPayment?.applied_end_quarter 
+      ? `${editingPayment.applied_end_quarter}-${editingPayment.applied_end_quarter_year}` 
+      : editingPayment?.applied_end_month 
+        ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}` 
+        : "";
+    
+    // If trying to change split state or periods, warn user
+    if (isCurrentlySplit !== wantsToBeSplit || 
+        (isCurrentlySplit && wantsToBeSplit && 
+         (formData.startPeriod !== currentStartPeriod || formData.endPeriod !== currentEndPeriod)) ||
+        (!isCurrentlySplit && !wantsToBeSplit && formData.periodValue !== currentStartPeriod)) {
+      
+      const confirmDelete = window.confirm(
+        "Changing payment periods requires deleting and recreating the payment. " +
+        "Would you like to delete this payment and create a new one with the updated periods?"
+      );
+      
+      if (confirmDelete) {
+        // Delete current payment
+        const deleteSuccess = await deletePayment(editingPaymentId);
+        
+        if (!deleteSuccess) {
+          toast({
+            title: "Error",
+            description: "Failed to delete the original payment. Please try again.",
+            variant: "destructive",
+          });
+          return false;
+        }
+        
+        // Create new payment with updated data
+        const createSuccess = await handleCreatePayment(formData);
+        
+        // Reset editing state
+        setEditingPaymentId(null);
+        
+        return createSuccess;
+      } else {
+        return false;
+      }
+    }
 
     try {
       await updatePayment(editingPaymentId, {

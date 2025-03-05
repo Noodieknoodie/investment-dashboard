@@ -165,13 +165,13 @@ export function PaymentForm({
   const [date, setDate] = useState<Date | undefined>(
     initialData?.receivedDate ? new Date(initialData.receivedDate) : new Date(),
   )
-  const [isSplitPayment, setIsSplitPayment] = useState(formData.appliedPeriod === "multiple")
+  const [isSplitPayment, setIsSplitPayment] = useState(initialData?.appliedPeriod === "multiple")
   const [hasChanges, setHasChanges] = useState(false)
   const [customMethod, setCustomMethod] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [availablePeriods, setAvailablePeriods] = useState<{ label: string, value: { quarter?: number, month?: number, year: number } }[]>([])
   const [isMonthly, setIsMonthly] = useState(false)
-  const [isNotesOpen, setIsNotesOpen] = useState(!!formData.notes || !!formData.attachmentUrl)
+  const [isNotesOpen, setIsNotesOpen] = useState(!!initialData?.notes || !!initialData?.attachmentUrl)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [expectedFee, setExpectedFee] = useState<number | null>(null)
   const [periodsLoading, setPeriodsLoading] = useState(false)
@@ -278,6 +278,7 @@ export function PaymentForm({
       }
     };
 
+    // Call calculate fee when initialized with data or when values change
     calculateExpectedFee();
   }, [clientId, contractId, formData.aum, formData.periodValue, isMonthly]);
 
@@ -334,8 +335,20 @@ export function PaymentForm({
       ...prev,
       appliedPeriod: checked ? "multiple" : "single",
       // When toggling to single, set both start and end to the current periodValue
-      ...(checked ? {} : { startPeriod: prev.periodValue, endPeriod: prev.periodValue })
+      ...(checked ? {} : { 
+        startPeriod: prev.periodValue || prev.startPeriod, 
+        endPeriod: prev.periodValue || prev.startPeriod 
+      })
     }))
+    
+    // Update periodValue when toggling from split to single
+    if (!checked && formData.startPeriod) {
+      setFormData((prev) => ({
+        ...prev,
+        periodValue: prev.startPeriod
+      }));
+    }
+    
     setHasChanges(true)
   }
 
@@ -433,7 +446,7 @@ export function PaymentForm({
 
         // Reset form if not editing
         if (!isEditing) {
-          handleClear();
+          handleClear(true);
         }
       } else {
         toast({
@@ -464,8 +477,11 @@ export function PaymentForm({
     onCancel();
   }
 
-  const handleClear = () => {
-    if (hasChanges) {
+  const handleClear = (skipConfirmationOrEvent: boolean | React.MouseEvent = false) => {
+    // If it's an event, it's from the button click, so don't skip confirmation
+    const skipConfirmation = typeof skipConfirmationOrEvent === 'boolean' ? skipConfirmationOrEvent : false;
+    
+    if (hasChanges && !skipConfirmation) {
       const confirmClear = window.confirm("This will clear all entered data. Continue?");
       if (!confirmClear) return;
     }
@@ -482,10 +498,12 @@ export function PaymentForm({
       notes: "",
       attachmentUrl: "",
     });
+    setHasChanges(false);
     setDate(new Date());
     setIsSplitPayment(false);
+    setExpectedFee(null);
+    // Add back any other state resets that were removed
     setCustomMethod("");
-    setHasChanges(false);
     setValidationError(null);
   }
 
@@ -524,6 +542,15 @@ export function PaymentForm({
         </Alert>
       )}
 
+      {isEditing && (
+        <Alert className="bg-amber-50 border-amber-200">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            Note: To change payment periods, you'll need to delete this payment and create a new one.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="space-y-1.5">
           <Label htmlFor="receivedDate" className="text-sm font-medium">
@@ -552,7 +579,7 @@ export function PaymentForm({
             </Label>
             <div className="flex items-center space-x-2">
               <span className="text-sm text-muted-foreground">Single</span>
-              <Switch checked={isSplitPayment} onCheckedChange={handleSplitPaymentToggle} />
+              <Switch checked={isSplitPayment} onCheckedChange={handleSplitPaymentToggle} disabled={isEditing} />
               <span className="text-sm text-muted-foreground">Split</span>
             </div>
           </div>
@@ -562,8 +589,9 @@ export function PaymentForm({
                 <Select
                   value={formData.startPeriod}
                   onValueChange={(value) => handleSelectChange("startPeriod", value)}
+                  disabled={isEditing}
                 >
-                  <SelectTrigger className="h-10 flex-1">
+                  <SelectTrigger className={`h-10 flex-1 ${isEditing ? "opacity-60" : ""}`}>
                     <SelectValue placeholder="Start period (required)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -577,8 +605,8 @@ export function PaymentForm({
                     ))}
                   </SelectContent>
                 </Select>
-                <Select value={formData.endPeriod} onValueChange={(value) => handleSelectChange("endPeriod", value)}>
-                  <SelectTrigger className="h-10 flex-1">
+                <Select value={formData.endPeriod} onValueChange={(value) => handleSelectChange("endPeriod", value)} disabled={isEditing}>
+                  <SelectTrigger className={`h-10 flex-1 ${isEditing ? "opacity-60" : ""}`}>
                     <SelectValue placeholder="End period (required)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -594,8 +622,8 @@ export function PaymentForm({
                 </Select>
               </>
             ) : (
-              <Select value={formData.periodValue} onValueChange={(value) => handleSelectChange("periodValue", value)}>
-                <SelectTrigger className="w-full h-10">
+              <Select value={formData.periodValue} onValueChange={(value) => handleSelectChange("periodValue", value)} disabled={isEditing}>
+                <SelectTrigger className={`w-full h-10 ${isEditing ? "opacity-60" : ""}`}>
                   <SelectValue placeholder="Select period (required)" />
                 </SelectTrigger>
                 <SelectContent>
