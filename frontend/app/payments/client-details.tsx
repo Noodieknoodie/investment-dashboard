@@ -9,13 +9,14 @@ interface ClientDetailsProps {
 }
 
 export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
-  // Calculate expected fee (using fee summary if available)
+  // Calculate expected fee - use the value directly without adjustments
+  // The backend already calculates this correctly for the payment frequency
   const expectedFee = feeSummary
     ? (client.paymentFrequency === "Monthly" ? feeSummary.monthly : feeSummary.quarterly) || 0
     : client.feeStructure === "Flat Rate"
-      ? client.feeAmount || 0
+      ? client.feeAmount || 0  // For flat rate, use the flat rate directly
       : client.aum && client.feePercentage
-        ? (client.aum * (client.feePercentage / 100)) / (client.paymentFrequency === "Monthly" ? 12 : 4)
+        ? (client.aum * (client.feePercentage / 100))  // For percentage, apply directly
         : 0
 
   // Format date
@@ -101,9 +102,9 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
               <dt className="text-gray-500">Expected Fee</dt>
               <dd className="font-medium text-gray-900">
                 {client.feeStructure === "Flat Rate" && client.feeAmount
-                  ? `$${(client.feeAmount / (client.paymentFrequency === "Monthly" ? 12 : 4)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  ? `$${client.feeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : client.aum && client.feePercentage
-                    ? `$${((client.aum * (client.feePercentage / 100)) / (client.paymentFrequency === "Monthly" ? 12 : 4)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    ? `$${(client.aum * (client.feePercentage / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     : client.lastPaymentAmount
                       ? `~$${client.lastPaymentAmount.toFixed(2)} (based on last payment)`
                       : "N/A"
@@ -175,7 +176,6 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                   <span className="text-sm text-gray-600">
                     {client.feeStructure === "Flat Rate"
                       ? `Flat fee of $${client.feeAmount?.toLocaleString() || "N/A"}`
-                      // FIXED: Better handling of missing AUM
                       : client.aum
                         ? `${client.feePercentage?.toFixed(3)}% of AUM ($${client.aum.toLocaleString()})`
                         : `${client.feePercentage?.toFixed(3)}% rate (no AUM data)`}
@@ -195,7 +195,7 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
               <div className="bg-gray-50 rounded-md p-3">
                 <h4 className="text-xs font-medium text-gray-500 mb-2">Fee Reference</h4>
 
-                {/* IMPROVED: Fee Reference Display */}
+                {/* FIXED: Fee Reference Display for Percentage of AUM */}
                 {client.feeStructure === "Percentage of AUM" ? (
                   <>
                     {!client.aum && (
@@ -204,46 +204,45 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                       </div>
                     )}
                     <div className="grid grid-cols-1 gap-2 text-xs">
+                      {/* Monthly display */}
                       <div>
                         <span className="text-gray-500">Monthly:</span>
-                        {client.aum && client.feePercentage ? (
+                        {client.aum ? (
                           <span className="font-medium ml-1">
-                            {(client.feePercentage / 12).toFixed(4)}% (${((client.aum * (client.feePercentage / 100)) / 12).toFixed(2)})
-                          </span>
-                        ) : client.feePercentage ? (
-                          <span className="font-medium ml-1">
-                            {(client.feePercentage / 12).toFixed(4)}% × AUM
+                            {client.feePercentage?.toFixed(4)}% (${(client.aum * (client.feePercentage! / 100)).toFixed(2)})
                           </span>
                         ) : (
-                          <span className="font-medium ml-1">N/A</span>
+                          <span className="font-medium ml-1">
+                            {client.feePercentage?.toFixed(4)}% × AUM
+                          </span>
                         )}
                       </div>
+                      
+                      {/* Quarterly display - show for reference */}
                       <div>
                         <span className="text-gray-500">Quarterly:</span>
-                        {client.aum && client.feePercentage ? (
+                        {client.aum ? (
                           <span className="font-medium ml-1">
-                            {(client.feePercentage / 4).toFixed(4)}% (${((client.aum * (client.feePercentage / 100)) / 4).toFixed(2)})
-                          </span>
-                        ) : client.feePercentage ? (
-                          <span className="font-medium ml-1">
-                            {(client.feePercentage / 4).toFixed(4)}% × AUM
+                            {client.feePercentage?.toFixed(4)}% (${(client.aum * (client.feePercentage! / 100) * 3).toFixed(2)})
                           </span>
                         ) : (
-                          <span className="font-medium ml-1">N/A</span>
+                          <span className="font-medium ml-1">
+                            {client.feePercentage?.toFixed(4)}% × AUM × 3
+                          </span>
                         )}
                       </div>
+                      
+                      {/* Annual display - show for reference */}
                       <div>
                         <span className="text-gray-500">Annually:</span>
-                        {client.aum && client.feePercentage ? (
+                        {client.aum ? (
                           <span className="font-medium ml-1">
-                            {client.feePercentage.toFixed(4)}% (${(client.aum * (client.feePercentage / 100)).toFixed(2)})
-                          </span>
-                        ) : client.feePercentage ? (
-                          <span className="font-medium ml-1">
-                            {client.feePercentage.toFixed(4)}% × AUM
+                            {client.feePercentage?.toFixed(4)}% (${(client.aum * (client.feePercentage! / 100) * (client.paymentFrequency === "Monthly" ? 12 : 4)).toFixed(2)})
                           </span>
                         ) : (
-                          <span className="font-medium ml-1">N/A</span>
+                          <span className="font-medium ml-1">
+                            {client.feePercentage?.toFixed(4)}% × AUM × {client.paymentFrequency === "Monthly" ? 12 : 4}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -251,18 +250,40 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                 ) : (
                   client.feeAmount ? (
                     <div className="grid grid-cols-1 gap-2 text-xs">
-                      <div>
-                        <span className="text-gray-500">Monthly:</span>
-                        <span className="font-medium ml-1">${(client.feeAmount / 12).toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Quarterly:</span>
-                        <span className="font-medium ml-1">${(client.feeAmount / 4).toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Annually:</span>
-                        <span className="font-medium ml-1">${client.feeAmount.toFixed(2)}</span>
-                      </div>
+                      {/* For Flat Rate, show the correct fee based on payment schedule */}
+                      {client.paymentFrequency === "Monthly" ? (
+                        <>
+                          {/* If Monthly payment schedule */}
+                          <div>
+                            <span className="text-gray-500">Monthly:</span>
+                            <span className="font-medium ml-1">${client.feeAmount.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Quarterly:</span>
+                            <span className="font-medium ml-1">${(client.feeAmount * 3).toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Annually:</span>
+                            <span className="font-medium ml-1">${(client.feeAmount * 12).toFixed(2)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* If Quarterly payment schedule */}
+                          <div>
+                            <span className="text-gray-500">Monthly:</span>
+                            <span className="font-medium ml-1">${(client.feeAmount / 3).toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Quarterly:</span>
+                            <span className="font-medium ml-1">${client.feeAmount.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Annually:</span>
+                            <span className="font-medium ml-1">${(client.feeAmount * 4).toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-gray-500">

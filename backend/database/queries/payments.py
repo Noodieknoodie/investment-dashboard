@@ -331,15 +331,9 @@ def calculate_expected_fee(contract_id: int, total_assets: Optional[int], period
         flat_rate = contract['flat_rate']
         if flat_rate is None:
             return None
-        
-        # Return full flat rate if periods match, otherwise adjust
-        if contract['payment_schedule'] == period_type or (
-            contract['payment_schedule'] == 'quarterly' and period_type == 'quarter'):
-            return flat_rate
-        elif contract['payment_schedule'] == 'monthly' and period_type == 'quarter':
-            return flat_rate * 3
-        elif contract['payment_schedule'] == 'quarterly' and period_type == 'month':
-            return flat_rate / 3
+            
+        # Return the flat rate directly
+        return flat_rate
             
     # Handle percentage fee
     elif fee_type in ('percentage', 'percent'):
@@ -347,18 +341,9 @@ def calculate_expected_fee(contract_id: int, total_assets: Optional[int], period
         if percent_rate is None or total_assets is None:
             return None
             
-        # Apply percentage rate to assets
-        # Note: percent_rate is already stored as a decimal in the database (e.g., 0.005 for 0.5%)
-        decimal_rate = float(percent_rate)
-        
-        # Apply rate based on period type
-        if contract['payment_schedule'] == period_type or (
-            contract['payment_schedule'] == 'quarterly' and period_type == 'quarter'):
-            return total_assets * decimal_rate
-        elif contract['payment_schedule'] == 'monthly' and period_type == 'quarter':
-            return total_assets * decimal_rate * 3
-        elif contract['payment_schedule'] == 'quarterly' and period_type == 'month':
-            return total_assets * decimal_rate / 3
+        # Simply apply the stored percentage rate directly to the assets
+        # No period adjustments needed - the rate is already in the correct form
+        return total_assets * float(percent_rate)
     
     # Default case if calculation not possible
     return None

@@ -245,11 +245,10 @@ export function PaymentHistory({
                         }
                       </TableCell>
                       <TableCell>
-                        {/* IMPROVED: Better Expected Fee Display */}
+                        {/* FIXED: Expected Fee Display - remove incorrect division */}
                         {payment.expectedFee ? formatCurrency(payment.expectedFee) :
                           payment.aum && client?.feePercentage
-                            ? formatCurrency((payment.aum * (client.feePercentage / 100)) /
-                              (client.paymentFrequency === "Monthly" ? 12 : 4))
+                            ? formatCurrency(payment.aum * (client.feePercentage / 100))
                             : (
                               <span className="text-muted-foreground">
                                 ~{formatCurrency(payment.amount)}

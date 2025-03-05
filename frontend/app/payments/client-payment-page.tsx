@@ -71,6 +71,14 @@ export function ClientPaymentPage({
   // Use the first contract from the client's contracts - the DB ensures correct association
   const activeContract = clientSnapshot?.contracts?.[0] || null;
 
+  // Reset editing state when clientId changes to prevent contract/client mismatch
+  useEffect(() => {
+    // When client changes, cancel any payment editing to prevent using wrong contract
+    if (editingPaymentId) {
+      setEditingPaymentId(null);
+    }
+  }, [clientId]);
+
   // Log if no contracts are found for debugging purposes
   useEffect(() => {
     if (clientSnapshot && (!clientSnapshot.contracts || clientSnapshot.contracts.length === 0)) {

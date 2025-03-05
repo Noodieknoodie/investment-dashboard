@@ -77,6 +77,23 @@ export function PaymentForm({
     console.log(`Attempting to fetch periods for client ${clientId}, contract ${contractId}`);
     setPeriodsLoading(true);
     
+    // Reset form data when client/contract changes to prevent using invalid data
+    if (!isEditing) {
+      setFormData({
+        receivedDate: format(new Date(), "yyyy-MM-dd"),
+        appliedPeriod: "single",
+        periodValue: "",
+        startPeriod: "",
+        endPeriod: "",
+        aum: "",
+        amount: "",
+        method: "",
+        notes: "",
+        attachmentUrl: "",
+      });
+      setExpectedFee(null);
+    }
+    
     const fetchPeriods = async () => {
       try {
         const periodsData = await paymentApi.getAvailablePeriods(parseInt(clientId, 10), parseInt(contractId, 10));
@@ -122,6 +139,16 @@ export function PaymentForm({
         if (formData.periodValue) {
           const [periodValue, periodYear] = formData.periodValue.split('-');
 
+          // Log the request data for debugging
+          console.log("💰 FEE CALCULATION REQUEST:", {
+            client_id: parseInt(clientId, 10),
+            contract_id: parseInt(contractId, 10),
+            total_assets: formData.aum ? parseInt(formData.aum, 10) : undefined,
+            period_type: isMonthly ? 'month' : 'quarter',
+            period: parseInt(periodValue, 10),
+            year: parseInt(periodYear, 10)
+          });
+
           const feeData = await paymentApi.calculateExpectedFee({
             client_id: parseInt(clientId, 10),
             contract_id: parseInt(contractId, 10),
@@ -131,12 +158,18 @@ export function PaymentForm({
             year: parseInt(periodYear, 10)
           });
 
+          // Log the response for debugging
+          console.log("💰 FEE CALCULATION RESPONSE:", feeData);
+
           // Fix: Check for undefined and provide null as fallback
           setExpectedFee(feeData.expected_fee !== undefined && feeData.expected_fee !== null ?
             Number(feeData.expected_fee) : null);
+          
+          // Log the final expected fee value
+          console.log("💰 EXPECTED FEE SET TO:", feeData.expected_fee);
         }
       } catch (error) {
-        console.error("Error calculating expected fee:", error);
+        console.error("❌ Error calculating expected fee:", error);
         setExpectedFee(null);
       }
     };

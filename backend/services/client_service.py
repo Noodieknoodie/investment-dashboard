@@ -121,13 +121,16 @@ def calculate_fee_summary(client_id: int) -> Dict[str, Any]:
                 'rate': None
             }
         
-        # Calculate monthly, quarterly and annual equivalents
+        # The flat_rate IS the payment amount for the specified schedule
+        payment = flat_rate
+        
+        # For display purposes only, convert to other payment schedules
         if contract['payment_schedule'] == 'monthly':
-            monthly = flat_rate
+            monthly = payment
             quarterly = monthly * 3
             annual = monthly * 12
         else:  # quarterly
-            quarterly = flat_rate
+            quarterly = payment
             monthly = quarterly / 3
             annual = quarterly * 4
             
@@ -154,16 +157,18 @@ def calculate_fee_summary(client_id: int) -> Dict[str, Any]:
             }
         
         last_assets = metrics_data['last_recorded_assets']
-        # Note: percent_rate is already stored as a decimal percentage in the database (e.g., 0.005 for 0.5%)
-        decimal_rate = float(percent_rate)
         
-        # Calculate fees based on schedule and rate
+        # Calculate the actual payment amount based on assets and rate
+        # The percent_rate is already in the correct format, no adjustments needed
+        payment = last_assets * float(percent_rate)
+        
+        # For display purposes only, convert to other payment frequencies
         if contract['payment_schedule'] == 'monthly':
-            monthly = last_assets * decimal_rate
+            monthly = payment
             quarterly = monthly * 3
             annual = monthly * 12
         else:  # quarterly
-            quarterly = last_assets * decimal_rate
+            quarterly = payment
             monthly = quarterly / 3
             annual = quarterly * 4
     else:
