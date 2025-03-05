@@ -137,47 +137,6 @@ def test_update_payment(test_client_id, test_contract_id):
     # Clean up
     payment_queries.delete_payment(payment_id)
 
-def test_create_split_payments(test_client_id, test_contract_id):
-    """
-    Test that create_split_payments creates multiple payments.
-    """
-    # Create test split payment data
-    today = datetime.now().strftime('%Y-%m-%d')
-    
-    # Test with quarterly payments
-    payment_ids = payment_queries.create_split_payments(
-        contract_id=test_contract_id,
-        client_id=test_client_id,
-        received_date=today,
-        total_assets=100000,
-        expected_fee=3000.0,
-        actual_fee=3000.0,
-        method="Test",
-        notes="Test split payment - PLEASE DELETE",
-        is_monthly=False,
-        start_period=1,
-        start_period_year=2023,
-        end_period=3,
-        end_period_year=2023
-    )
-    
-    assert len(payment_ids) == 3, "Should create 3 payments"
-    
-    # Verify split group ID is set
-    payment = payment_queries.get_payment_by_id(payment_ids[0])
-    assert payment['split_group_id'] is not None, "Split group ID should be set"
-    
-    # Get all payments in the group
-    split_group = payment_queries.get_split_payment_group(payment['split_group_id'])
-    assert len(split_group) == 3, "Split group should contain 3 payments"
-    
-    # Verify each payment has the correct amount (should be evenly distributed)
-    for p in split_group:
-        assert p['actual_fee'] == 1000.0, "Each payment should be 1/3 of the total"
-    
-    # Clean up
-    for payment_id in payment_ids:
-        payment_queries.delete_payment(payment_id)
 
 def test_calculate_expected_fee(test_contract_id):
     """

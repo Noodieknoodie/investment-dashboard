@@ -208,7 +208,7 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                         <span className="text-gray-500">Monthly:</span>
                         {client.aum && client.feePercentage ? (
                           <span className="font-medium ml-1">
-                            ${((client.aum * (client.feePercentage / 100)) / 12).toFixed(2)}
+                            {(client.feePercentage / 12).toFixed(4)}% (${((client.aum * (client.feePercentage / 100)) / 12).toFixed(2)})
                           </span>
                         ) : client.feePercentage ? (
                           <span className="font-medium ml-1">
@@ -222,7 +222,7 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                         <span className="text-gray-500">Quarterly:</span>
                         {client.aum && client.feePercentage ? (
                           <span className="font-medium ml-1">
-                            ${((client.aum * (client.feePercentage / 100)) / 4).toFixed(2)}
+                            {(client.feePercentage / 4).toFixed(4)}% (${((client.aum * (client.feePercentage / 100)) / 4).toFixed(2)})
                           </span>
                         ) : client.feePercentage ? (
                           <span className="font-medium ml-1">
@@ -236,7 +236,7 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                         <span className="text-gray-500">Annually:</span>
                         {client.aum && client.feePercentage ? (
                           <span className="font-medium ml-1">
-                            ${(client.aum * (client.feePercentage / 100)).toFixed(2)}
+                            {client.feePercentage.toFixed(4)}% (${(client.aum * (client.feePercentage / 100)).toFixed(2)})
                           </span>
                         ) : client.feePercentage ? (
                           <span className="font-medium ml-1">

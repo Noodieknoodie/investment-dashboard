@@ -84,9 +84,24 @@ export function PaymentForm({
         setIsMonthly(periodsData.is_monthly);
       } catch (error) {
         console.error("Error fetching available periods:", error);
+        
+        // Provide a more helpful error message based on the error
+        let errorMessage = "Failed to load available payment periods.";
+        
+        if (error instanceof Error) {
+          // Check if it's an API error (usually has a more descriptive message)
+          if (error.message.includes("404") || error.message.includes("400")) {
+            errorMessage = `API Error: ${error.message}`;
+          } else if (error.message.includes("500")) {
+            errorMessage = "Server error. Please check if the backend service is running.";
+          } else if (error.message.includes("Failed to fetch")) {
+            errorMessage = "Network error. Please check your connection and if the backend server is running.";
+          }
+        }
+        
         toast({
           title: "Error",
-          description: "Failed to load available payment periods.",
+          description: errorMessage,
           variant: "destructive",
         });
       } finally {
@@ -350,6 +365,18 @@ export function PaymentForm({
     ...period,
     formattedLabel: period.label
   }));
+
+  // Check if we have a valid contract before rendering the form
+  if (!contractId) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          No valid contract found for this client. Please make sure the client has an active contract.
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

@@ -67,9 +67,16 @@ export function ClientPaymentPage({
   // Map backend data to UI format
   const uiClient = clientSnapshot ? mapClientSnapshotToUI(clientSnapshot, complianceStatus) : null;
   const uiPayments = payments.map(payment => mapPaymentToUI(payment));
-
-  // Check if any providers are in the client's contracts
+  
+  // Use the first contract from the client's contracts - the DB ensures correct association
   const activeContract = clientSnapshot?.contracts?.[0] || null;
+
+  // Log if no contracts are found for debugging purposes
+  useEffect(() => {
+    if (clientSnapshot && (!clientSnapshot.contracts || clientSnapshot.contracts.length === 0)) {
+      console.warn(`No contracts found for client ${clientId}`);
+    }
+  }, [clientSnapshot, clientId]);
 
   // Handle edit payment
   const handleEditPayment = (payment: Payment) => {
@@ -298,8 +305,7 @@ export function ClientPaymentPage({
                           endPeriod: editingPayment.applied_end_quarter
                             ? `${editingPayment.applied_end_quarter}-${editingPayment.applied_end_quarter_year}`
                             : editingPayment.applied_end_month
-                              ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}`
-                              : "",
+                              ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}`                              : "",
                           aum: editingPayment.total_assets?.toString() || "",
                           amount: editingPayment.actual_fee.toString(),
                           method: editingPayment.method || "",
