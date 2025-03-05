@@ -31,6 +31,112 @@ interface PaymentFormProps {
   previousPayments?: Array<{ amount: number, date: string }>
 }
 
+// Add this helper to validate client/contract relationship
+// We can't trust that the parent component has done this validation correctly
+function useClientContractValidation(clientId: string, contractId: string) {
+  const [isValid, setIsValid] = useState<boolean | null>(null);
+  const [isChecking, setIsChecking] = useState<boolean>(false);
+  const [retries, setRetries] = useState<number>(0);
+  
+  useEffect(() => {
+    // Reset validation state when either ID changes
+    setIsValid(null);
+    setIsChecking(true); // Start checking immediately
+    setRetries(0); // Reset retries
+    
+    // Skip validation if we don't have both IDs
+    if (!clientId || !contractId) {
+      setIsChecking(false);
+      return;
+    }
+    
+    console.log(`🔎 [VALIDATION] Checking if contract ${contractId} belongs to client ${clientId}...`);
+    
+    let isMounted = true;
+    let validationTimeout: NodeJS.Timeout;
+    
+    const validateRelationship = async () => {
+      try {
+        // Add a deliberate delay to avoid race conditions
+        // This ensures we don't fetch data before client/contract relationship is confirmed
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        if (!isMounted) return;
+        
+        // Get client data to check contracts
+        const response = await fetch(`http://localhost:8000/clients/${clientId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch client data: ${response.statusText}`);
+        }
+        
+        if (!isMounted) return;
+        
+        const data = await response.json();
+        
+        if (!isMounted) return;
+        
+        // Check if this contract belongs to this client
+        const isValidContract = data.contracts && 
+          Array.isArray(data.contracts) && 
+          data.contracts.some((c: { contract_id: number }) => c.contract_id === parseInt(contractId, 10));
+        
+        // Log the validation result more prominently
+        if (isValidContract) {
+          console.log(`✅ [VALIDATION SUCCESS] Contract ${contractId} belongs to client ${clientId}`);
+          setIsValid(true);
+          setIsChecking(false);
+        } else {
+          console.error(`❌ [VALIDATION FAILED] Contract ${contractId} does NOT belong to client ${clientId}`);
+          console.error(`Valid contracts for client ${clientId}: `, 
+            data.contracts?.map((c: { contract_id: number }) => c.contract_id).join(', ') || 'None');
+            
+          // If validation fails and we have few retries, try again after a delay
+          // This helps in race conditions when client data is still loading
+          if (retries < 3) {
+            console.log(`⏳ [VALIDATION] Retry ${retries + 1}/3 in 500ms...`);
+            
+            // Increment retries
+            setRetries(prev => prev + 1);
+            
+            // Schedule the next retry
+            validationTimeout = setTimeout(() => {
+              if (isMounted) validateRelationship();
+            }, 500);
+          } else {
+            console.error(`❌ [VALIDATION] All retries failed for client ${clientId}, contract ${contractId}`);
+            setIsValid(false);
+            setIsChecking(false);
+          }
+        }
+      } catch (error) {
+        console.error('[VALIDATION ERROR]', error);
+        
+        // Retry on error too
+        if (retries < 3) {
+          console.log(`⏳ [VALIDATION] Retry ${retries + 1}/3 after error...`);
+          setRetries(prev => prev + 1);
+          validationTimeout = setTimeout(() => {
+            if (isMounted) validateRelationship();
+          }, 500);
+        } else {
+          setIsValid(false);
+          setIsChecking(false);
+        }
+      }
+    };
+    
+    validateRelationship();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      clearTimeout(validationTimeout);
+    };
+  }, [clientId, contractId, retries]);
+  
+  return { isValid, isChecking };
+}
+
 export function PaymentForm({
   clientId,
   contractId,
@@ -70,12 +176,21 @@ export function PaymentForm({
   const [expectedFee, setExpectedFee] = useState<number | null>(null)
   const [periodsLoading, setPeriodsLoading] = useState(false)
 
-  // Fetch available periods when contractId changes
-  useEffect(() => {
-    if (!contractId) return;
+  // Add validation
+  const { isValid: isValidRelationship, isChecking: isValidating } = useClientContractValidation(clientId, contractId);
 
-    console.log(`Attempting to fetch periods for client ${clientId}, contract ${contractId}`);
-    setPeriodsLoading(true);
+  // Fetch available periods when contractId changes - BUT ONLY IF VALIDATED
+  useEffect(() => {
+    // Don't fetch if we don't have valid IDs or if the relationship is invalid
+    if (!contractId || !clientId || isValidRelationship === false) {
+      return;
+    }
+    
+    // Wait for validation to complete
+    if (isValidating || isValidRelationship === null) {
+      console.log('Waiting for client/contract validation...');
+      return;
+    }
     
     // Reset form data when client/contract changes to prevent using invalid data
     if (!isEditing) {
@@ -94,31 +209,20 @@ export function PaymentForm({
       setExpectedFee(null);
     }
     
+    console.log(`✅ VALIDATED: Client ${clientId} owns Contract ${contractId} - Fetching periods...`);
+    setPeriodsLoading(true);
+    
     const fetchPeriods = async () => {
       try {
         const periodsData = await paymentApi.getAvailablePeriods(parseInt(clientId, 10), parseInt(contractId, 10));
+        console.log(`Successfully fetched periods for client=${clientId} contract=${contractId}`);
         setAvailablePeriods(periodsData.periods);
         setIsMonthly(periodsData.is_monthly);
       } catch (error) {
-        console.error("Error fetching available periods:", error);
-        
-        // Provide a more helpful error message based on the error
-        let errorMessage = "Failed to load available payment periods.";
-        
-        if (error instanceof Error) {
-          // Check if it's an API error (usually has a more descriptive message)
-          if (error.message.includes("404") || error.message.includes("400")) {
-            errorMessage = `API Error: ${error.message}`;
-          } else if (error.message.includes("500")) {
-            errorMessage = "Server error. Please check if the backend service is running.";
-          } else if (error.message.includes("Failed to fetch")) {
-            errorMessage = "Network error. Please check your connection and if the backend server is running.";
-          }
-        }
-        
+        console.error(`Error fetching periods:`, error);
         toast({
-          title: "Error",
-          description: errorMessage,
+          title: "Error loading periods",
+          description: "Could not load available payment periods",
           variant: "destructive",
         });
       } finally {
@@ -127,7 +231,7 @@ export function PaymentForm({
     };
 
     fetchPeriods();
-  }, [clientId, contractId, toast]);
+  }, [clientId, contractId, isEditing, toast, isValidRelationship, isValidating]);
 
   // Calculate expected fee when AUM or period changes
   useEffect(() => {

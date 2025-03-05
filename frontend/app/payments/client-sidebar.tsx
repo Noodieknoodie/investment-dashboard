@@ -132,7 +132,7 @@ function ClientButton({ client, isSelected, onClick }: ClientButtonProps) {
     >
       <div className="flex items-center w-full">
         <span className="mr-3">{getComplianceIcon(client.complianceStatus)}</span>
-        <span className="truncate flex-grow text-left">Client: {client.name} (ID: {client.id})</span>
+        <span className="truncate flex-grow text-left">{client.name}</span>
       </div>
     </Button>
   )

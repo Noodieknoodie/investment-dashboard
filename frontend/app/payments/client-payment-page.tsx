@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { FileText } from "lucide-react"
+import { FileText, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -68,23 +68,51 @@ export function ClientPaymentPage({
   const uiClient = clientSnapshot ? mapClientSnapshotToUI(clientSnapshot, complianceStatus) : null;
   const uiPayments = payments.map(payment => mapPaymentToUI(payment));
   
-  // Use the first contract from the client's contracts - the DB ensures correct association
+  // Use the first contract from the client's contracts
   const activeContract = clientSnapshot?.contracts?.[0] || null;
 
-  // Reset editing state when clientId changes to prevent contract/client mismatch
+  // Simple approach: only render the form when we have real data
+  const hasValidContractData = clientSnapshot && activeContract;
+
+  // #####################################################
+  // CRITICAL DEBUGGING FOR CLIENT/CONTRACT RELATIONSHIPS
+  // #####################################################
   useEffect(() => {
-    // When client changes, cancel any payment editing to prevent using wrong contract
+    if (clientId) {
+      console.log(`🔄 [DEBUG] Client changed to: ${clientId}`);
+    }
+  }, [clientId]);
+
+  useEffect(() => {
+    if (activeContract) {
+      console.log(`🔄 [DEBUG] Contract changed to: ${activeContract.contract_id} (belongs to client ${activeContract.client_id})`);
+      
+      // Check if there's a mismatch
+      if (activeContract.client_id !== clientId) {
+        console.error(`⚠️ [CRITICAL ERROR] Contract belongs to client ${activeContract.client_id} but we're in client ${clientId} context!`);
+      }
+    }
+  }, [activeContract, clientId]);
+
+  useEffect(() => {
+    if (clientSnapshot) {
+      console.log(`🔄 [DEBUG] Client snapshot loaded: ${clientSnapshot.client.client_id}`);
+      
+      if (clientSnapshot.contracts && clientSnapshot.contracts.length > 0) {
+        console.log(`🔄 [DEBUG] Contracts available: ${clientSnapshot.contracts.map(c => c.contract_id).join(', ')}`);
+      } else {
+        console.warn(`⚠️ [WARNING] No contracts found for client ${clientSnapshot.client.client_id}`);
+      }
+    }
+  }, [clientSnapshot]);
+  // #####################################################
+
+  // Reset editing state when clientId changes
+  useEffect(() => {
     if (editingPaymentId) {
       setEditingPaymentId(null);
     }
   }, [clientId]);
-
-  // Log if no contracts are found for debugging purposes
-  useEffect(() => {
-    if (clientSnapshot && (!clientSnapshot.contracts || clientSnapshot.contracts.length === 0)) {
-      console.warn(`No contracts found for client ${clientId}`);
-    }
-  }, [clientSnapshot, clientId]);
 
   // Handle edit payment
   const handleEditPayment = (payment: Payment) => {
@@ -292,41 +320,51 @@ export function ClientPaymentPage({
                   )}
                 </CardHeader>
                 <CardContent>
-                  <PaymentForm
-                    clientId={clientId.toString()}
-                    contractId={activeContract?.contract_id?.toString() || ""}
-                    initialData={
-                      editingPayment
-                        ? {
-                          receivedDate: editingPayment.received_date,
-                          appliedPeriod: editingPayment.is_split_payment ? "multiple" : "single",
-                          periodValue: editingPayment.applied_start_quarter
-                            ? `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`
-                            : editingPayment.applied_start_month
-                              ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}`
-                              : "",
-                          startPeriod: editingPayment.applied_start_quarter
-                            ? `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`
-                            : editingPayment.applied_start_month
-                              ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}`
-                              : "",
-                          endPeriod: editingPayment.applied_end_quarter
-                            ? `${editingPayment.applied_end_quarter}-${editingPayment.applied_end_quarter_year}`
-                            : editingPayment.applied_end_month
-                              ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}`                              : "",
-                          aum: editingPayment.total_assets?.toString() || "",
-                          amount: editingPayment.actual_fee.toString(),
-                          method: editingPayment.method || "",
-                          notes: editingPayment.notes || "",
-                          attachmentUrl: "", // We'll handle this separately
-                        }
-                        : undefined
-                    }
-                    onCancel={handleCancelEdit}
-                    onSubmit={editingPaymentId ? handleUpdatePayment : handleCreatePayment}
-                    isEditing={!!editingPaymentId}
-                    isLoading={isPaymentDetailLoading}
-                  />
+                  {!hasValidContractData ? (
+                    <div className="flex justify-center items-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="ml-3 text-sm text-gray-500">
+                        {isClientLoading ? "Loading client data..." : "No valid contract found"}
+                      </span>
+                    </div>
+                  ) : (
+                    <PaymentForm
+                      key={`payment-form-${clientId}-${activeContract?.contract_id}`}
+                      clientId={clientId.toString()}
+                      contractId={String(activeContract?.contract_id)}
+                      initialData={
+                        editingPayment
+                          ? {
+                            receivedDate: editingPayment.received_date,
+                            appliedPeriod: editingPayment.is_split_payment ? "multiple" : "single",
+                            periodValue: editingPayment.applied_start_quarter
+                              ? `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`
+                              : editingPayment.applied_start_month
+                                ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}`
+                                : "",
+                            startPeriod: editingPayment.applied_start_quarter
+                              ? `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`
+                              : editingPayment.applied_start_month
+                                ? `${editingPayment.applied_start_month}-${editingPayment.applied_start_month_year}`
+                                : "",
+                            endPeriod: editingPayment.applied_end_quarter
+                              ? `${editingPayment.applied_end_quarter}-${editingPayment.applied_end_quarter_year}`
+                              : editingPayment.applied_end_month
+                                ? `${editingPayment.applied_end_month}-${editingPayment.applied_end_month_year}`                              : "",
+                            aum: editingPayment.total_assets?.toString() || "",
+                            amount: editingPayment.actual_fee.toString(),
+                            method: editingPayment.method || "",
+                            notes: editingPayment.notes || "",
+                            attachmentUrl: "", // We'll handle this separately
+                          }
+                          : undefined
+                      }
+                      onCancel={handleCancelEdit}
+                      onSubmit={editingPaymentId ? handleUpdatePayment : handleCreatePayment}
+                      isEditing={!!editingPaymentId}
+                      isLoading={isPaymentDetailLoading}
+                    />
+                  )}
                 </CardContent>
               </Card>
             </div>
