@@ -17,6 +17,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { formatCurrency, formatPercentage } from "@/lib/utils"
 import type { Client, Payment, PaymentPeriod } from "@/types"
 
 interface PaymentHistoryProps {
@@ -129,16 +130,6 @@ export function PaymentHistory({
     return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
   }
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount)
-  }
-
   if (isLoading) {
     return (
       <div className="rounded-md border">
@@ -247,15 +238,14 @@ export function PaymentHistory({
                         {client?.feeStructure === "Flat Rate"
                           ? "Flat Rate"
                           : client?.feePercentage
-                            ? `${client.feePercentage.toFixed(3)}% of AUM`
+                            ? `${formatPercentage(client.feePercentage, 3).replace('%', '')}% of AUM`
                             : "N/A"
                         }
                       </TableCell>
                       <TableCell>
-                        {/* FIXED: Expected Fee Display - remove incorrect division */}
                         {payment.expectedFee ? formatCurrency(payment.expectedFee) :
                           payment.aum && client?.feePercentage
-                            ? formatCurrency(payment.aum * (client.feePercentage / 100))
+                            ? formatCurrency(payment.aum * client.feePercentage)
                             : (
                               <span className="text-muted-foreground">
                                 ~{formatCurrency(payment.amount)}
@@ -278,7 +268,7 @@ export function PaymentHistory({
                           const effectiveExpectedFee = payment.expectedFee !== undefined && payment.expectedFee !== null
                             ? payment.expectedFee
                             : payment.aum && client?.feePercentage
-                              ? payment.aum * (client.feePercentage / 100)
+                              ? payment.aum * client.feePercentage
                               : null;
                           
                           if (effectiveExpectedFee === null) {

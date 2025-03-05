@@ -2,6 +2,7 @@ import { CalendarClock, CreditCard, AlertTriangle, CheckCircle, Clock, FileText 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Client } from "../../types"
 import { FeeSummary } from "@/lib/api"
+import { formatCurrency, formatPercentage, getNormalizedFees } from "@/lib/utils"
 
 interface ClientDetailsProps {
   client: Client
@@ -9,15 +10,12 @@ interface ClientDetailsProps {
 }
 
 export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
+  // Calculate all fee variations once using our utility
+  const fees = getNormalizedFees(client, feeSummary);
+  
   // Calculate expected fee - use the value directly without adjustments
   // The backend already calculates this correctly for the payment frequency
-  const expectedFee = feeSummary
-    ? (client.paymentFrequency === "Monthly" ? feeSummary.monthly : feeSummary.quarterly) || 0
-    : client.feeStructure === "Flat Rate"
-      ? client.feeAmount || 0  // For flat rate, use the flat rate directly
-      : client.aum && client.feePercentage
-        ? (client.aum * (client.feePercentage / 100))  // For percentage, apply directly
-        : 0
+  const expectedFee = fees.expectedFee;
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -74,7 +72,7 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
             {client.feeStructure === "Flat Rate" ? (
               <div className="flex justify-between py-1">
                 <dt className="text-gray-500">Fee Amount</dt>
-                <dd className="font-medium text-gray-900">${client.feeAmount?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || "N/A"}</dd>
+                <dd className="font-medium text-gray-900">{formatCurrency(client.feeAmount)}</dd>
               </div>
             ) : (
               <div className="flex justify-between py-1">
@@ -84,25 +82,25 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                     {client.paymentFrequency === "Monthly" ? (
                       <>
                         <span className="px-2 py-1 text-xs border-r border-gray-200">
-                          M: {client.feePercentage?.toFixed(3)}%
+                          M: {formatPercentage(fees.monthlyRate, 3)}
                         </span>
                         <span className="px-2 py-1 text-xs border-r border-gray-200">
-                          Q: {((client.feePercentage || 0) * 3).toFixed(3)}%
+                          Q: {formatPercentage(fees.quarterlyRate, 3)}
                         </span>
                         <span className="px-2 py-1 text-xs">
-                          A: {((client.feePercentage || 0) * 12).toFixed(3)}%
+                          A: {formatPercentage(fees.annualRate, 3)}
                         </span>
                       </>
                     ) : (
                       <>
                         <span className="px-2 py-1 text-xs border-r border-gray-200">
-                          M: {((client.feePercentage || 0) / 3).toFixed(3)}%
+                          M: {formatPercentage(fees.monthlyRate, 3)}
                         </span>
                         <span className="px-2 py-1 text-xs border-r border-gray-200">
-                          Q: {client.feePercentage?.toFixed(3)}%
+                          Q: {formatPercentage(fees.quarterlyRate, 3)}
                         </span>
                         <span className="px-2 py-1 text-xs">
-                          A: {((client.feePercentage || 0) * 4).toFixed(3)}%
+                          A: {formatPercentage(fees.annualRate, 3)}
                         </span>
                       </>
                     )}
@@ -123,19 +121,15 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">AUM</dt>
               <dd className="font-medium text-gray-900">
-                {client.aum ? `$${client.aum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : "No AUM data available"}
+                {fees.hasAum ? formatCurrency(client.aum) : "No AUM data available"}
               </dd>
             </div>
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">Expected Fee</dt>
               <dd className="font-medium text-gray-900">
-                {client.feeStructure === "Flat Rate" && client.feeAmount
-                  ? `$${client.feeAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : client.aum && client.feePercentage
-                    ? `$${(client.aum * (client.feePercentage / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : client.lastPaymentAmount
-                      ? `~$${client.lastPaymentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (based on last payment)`
-                      : "N/A"
+                {fees.expectedFee 
+                  ? formatCurrency(fees.expectedFee) + (client.lastPaymentAmount && !fees.isFlatRate && !fees.hasAum ? " (based on last payment)" : "")
+                  : "N/A"
                 }
               </dd>
             </div>
@@ -146,10 +140,7 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
             <div className="flex justify-between py-1">
               <dt className="text-gray-500">Last Payment Amount</dt>
               <dd className="font-medium text-gray-900">
-                ${client.lastPaymentAmount.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatCurrency(client.lastPaymentAmount)}
               </dd>
             </div>
             <div className="flex justify-between py-1">
@@ -202,15 +193,11 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
                 <div className="flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-gray-400" />
                   <span className="text-sm text-gray-600">
-                    {client.feeStructure === "Flat Rate"
-                      ? `Flat fee of $${client.feeAmount?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) || "N/A"}`
-                      : client.aum 
-                        ? client.paymentFrequency === "Monthly"
-                          ? `Annually: ${((client.feePercentage || 0) * 12).toFixed(3)}% ($${(client.aum * (client.feePercentage! / 100) * 12).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`
-                          : `Annually: ${((client.feePercentage || 0) * 4).toFixed(3)}% ($${(client.aum * (client.feePercentage! / 100) * 4).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`
-                        : client.paymentFrequency === "Monthly"
-                          ? `Annually: ${((client.feePercentage || 0) * 12).toFixed(3)}% rate (no AUM data)`
-                          : `Annually: ${((client.feePercentage || 0) * 4).toFixed(3)}% rate (no AUM data)`}
+                    {fees.isFlatRate
+                      ? `Flat fee of ${formatCurrency(client.feeAmount)}`
+                      : fees.hasAum 
+                        ? `Annually: ${formatPercentage(fees.annualRate, 3)} (${formatCurrency(fees.annualAmount)})`
+                        : `Annually: ${formatPercentage(fees.annualRate, 3)} rate (no AUM data)`}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -227,113 +214,86 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
               <div className="bg-gray-50 rounded-md p-3">
                 <h4 className="text-xs font-medium text-gray-500 mb-2">Fee Reference</h4>
 
-                {/* FIXED: Fee Reference Display for Percentage of AUM */}
-                {client.feeStructure === "Percentage of AUM" ? (
-                  <>
-                    {!client.aum && (
-                      <div className="text-xs italic text-gray-500 mb-2">
-                        No AUM data available. Based on rate only.
-                      </div>
-                    )}
+                {/* Fee Reference Display */}
+                {fees.isFlatRate ? (
+                  fees.monthlyRate ? (
                     <div className="grid grid-cols-1 gap-2 text-xs">
-                      {/* Monthly display - base percentage rate for monthly, or divided by 3 for quarterly */}
+                      {/* Monthly display */}
                       <div>
                         <span className="text-gray-500">Monthly:</span>
-                        {client.aum ? (
-                          <span className="font-medium ml-1">
-                            {client.paymentFrequency === "Monthly" 
-                              ? client.feePercentage?.toFixed(4)
-                              : ((client.feePercentage || 0) / 3).toFixed(4)}% (${(client.aum * (client.feePercentage! / 100) * (client.paymentFrequency === "Monthly" ? 1 : 1/3)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})
-                          </span>
-                        ) : (
-                          <span className="font-medium ml-1">
-                            {client.paymentFrequency === "Monthly" 
-                              ? client.feePercentage?.toFixed(4)
-                              : ((client.feePercentage || 0) / 3).toFixed(4)}%
-                          </span>
-                        )}
+                        <span className="font-medium ml-1">{formatCurrency(fees.monthlyRate)}</span>
                       </div>
                       
-                      {/* Quarterly display - 3x the monthly percentage, or base rate for quarterly */}
+                      {/* Quarterly display */}
                       <div>
                         <span className="text-gray-500">Quarterly:</span>
-                        {client.aum ? (
-                          <span className="font-medium ml-1">
-                            {client.paymentFrequency === "Monthly" 
-                              ? ((client.feePercentage || 0) * 3).toFixed(4) 
-                              : client.feePercentage?.toFixed(4)}% (${(client.aum * (client.feePercentage! / 100) * (client.paymentFrequency === "Monthly" ? 3 : 1)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})
-                          </span>
-                        ) : (
-                          <span className="font-medium ml-1">
-                            {client.paymentFrequency === "Monthly" 
-                              ? ((client.feePercentage || 0) * 3).toFixed(4) 
-                              : client.feePercentage?.toFixed(4)}% {client.paymentFrequency === "Monthly" ? "× 3 months" : ""}
-                          </span>
-                        )}
+                        <span className="font-medium ml-1">{formatCurrency(fees.quarterlyRate)}</span>
                       </div>
                       
-                      {/* Annual display - 12x the monthly or 4x the quarterly */}
+                      {/* Annual display */}
                       <div>
                         <span className="text-gray-500">Annually:</span>
-                        {client.aum ? (
-                          <span className="font-medium ml-1">
-                            {client.paymentFrequency === "Monthly" 
-                              ? ((client.feePercentage || 0) * 12).toFixed(4) 
-                              : ((client.feePercentage || 0) * 4).toFixed(4)}% (${(client.aum * (client.feePercentage! / 100) * (client.paymentFrequency === "Monthly" ? 12 : 4)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})
-                          </span>
-                        ) : (
-                          <span className="font-medium ml-1">
-                            {client.paymentFrequency === "Monthly" 
-                              ? ((client.feePercentage || 0) * 12).toFixed(4) 
-                              : ((client.feePercentage || 0) * 4).toFixed(4)}% {client.paymentFrequency === "Monthly" ? "× 12 months" : "× 4 quarters"}
-                          </span>
-                        )}
+                        <span className="font-medium ml-1">{formatCurrency(fees.annualRate)}</span>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  client.feeAmount ? (
-                    <div className="grid grid-cols-1 gap-2 text-xs">
-                      {/* For Flat Rate, show the correct fee based on payment schedule */}
-                      {client.paymentFrequency === "Monthly" ? (
-                        <>
-                          {/* If Monthly payment schedule */}
-                          <div>
-                            <span className="text-gray-500">Monthly:</span>
-                            <span className="font-medium ml-1">${client.feeAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Quarterly:</span>
-                            <span className="font-medium ml-1">${(client.feeAmount * 3).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Annually:</span>
-                            <span className="font-medium ml-1">${(client.feeAmount * 12).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {/* If Quarterly payment schedule */}
-                          <div>
-                            <span className="text-gray-500">Monthly:</span>
-                            <span className="font-medium ml-1">${(client.feeAmount / 3).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Quarterly:</span>
-                            <span className="font-medium ml-1">${client.feeAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Annually:</span>
-                            <span className="font-medium ml-1">${(client.feeAmount * 4).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                          </div>
-                        </>
-                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-gray-500">
                       Flat fee information not available
                     </div>
                   )
+                ) : (
+                  <>
+                    {!fees.hasAum && (
+                      <div className="text-xs italic text-gray-500 mb-2">
+                        No AUM data available. Based on rate only.
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 gap-2 text-xs">
+                      {/* Monthly display */}
+                      <div>
+                        <span className="text-gray-500">Monthly:</span>
+                        {fees.hasAum ? (
+                          <span className="font-medium ml-1">
+                            {formatPercentage(fees.monthlyRate, 4)} ({formatCurrency(fees.monthlyAmount)})
+                          </span>
+                        ) : (
+                          <span className="font-medium ml-1">
+                            {formatPercentage(fees.monthlyRate, 4)}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Quarterly display */}
+                      <div>
+                        <span className="text-gray-500">Quarterly:</span>
+                        {fees.hasAum ? (
+                          <span className="font-medium ml-1">
+                            {formatPercentage(fees.quarterlyRate, 4)} ({formatCurrency(fees.quarterlyAmount)})
+                          </span>
+                        ) : (
+                          <span className="font-medium ml-1">
+                            {formatPercentage(fees.quarterlyRate, 4)} 
+                            {client.paymentFrequency === "Monthly" ? " × 3 months" : ""}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Annual display */}
+                      <div>
+                        <span className="text-gray-500">Annually:</span>
+                        {fees.hasAum ? (
+                          <span className="font-medium ml-1">
+                            {formatPercentage(fees.annualRate, 4)} ({formatCurrency(fees.annualAmount)})
+                          </span>
+                        ) : (
+                          <span className="font-medium ml-1">
+                            {formatPercentage(fees.annualRate, 4)} 
+                            {client.paymentFrequency === "Monthly" ? " × 12 months" : " × 4 quarters"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -343,3 +303,4 @@ export function ClientDetails({ client, feeSummary }: ClientDetailsProps) {
     </>
   )
 }
+ 
