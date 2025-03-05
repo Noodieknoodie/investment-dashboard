@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from typing import List, Optional, Dict, Any
 from services import payment_service
 from models.schemas import PaymentCreate, PaymentUpdate, PaymentWithDetails, ExpectedFeeRequest, ExpectedFeeResponse, PaginatedResponse
+from database.queries import get_client_by_id, validate_client_contract
 
 router = APIRouter(
     prefix="/payments",
@@ -63,20 +64,6 @@ async def delete_payment(payment_id: int):
     try:
         result = payment_service.delete_payment(payment_id)
         if not result["success"]:
-            if result.get("requires_confirmation"):
-                # Return information about split payment group
-                return result
-            raise HTTPException(status_code=404, detail=result["message"])
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.delete("/split-group/{split_group_id}")
-async def delete_split_payment_group(split_group_id: str):
-    """Delete all payments in a split payment group"""
-    try:
-        result = payment_service.delete_split_payment_group(split_group_id)
-        if not result["success"]:
             raise HTTPException(status_code=404, detail=result["message"])
         return result
     except Exception as e:
@@ -99,9 +86,26 @@ async def calculate_expected_fee(request: ExpectedFeeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/available-periods/{client_id}/{contract_id}")
+@router.get("/available-periods/{client_id}/{contract_id}", response_model=List[Dict[str, Any]])
 async def get_available_periods(client_id: int, contract_id: int):
-    """Get available periods for payment entry based on contract"""
+    """
+    Get available payment periods for a client and contract.
+    
+    Now includes validation to ensure the contract belongs to the client.
+    """
+    # Validate client exists
+    client = get_client_by_id(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail=f"Client not found with id {client_id}")
+    
+    # Validate that contract belongs to client
+    if not validate_client_contract(client_id, contract_id):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Contract {contract_id} not found for client {client_id}"
+        )
+    
+    # Get available periods using the existing service method
     try:
         return payment_service.get_available_periods(client_id, contract_id)
     except HTTPException as e:
@@ -110,6 +114,3 @@ async def get_available_periods(client_id: int, contract_id: int):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-        

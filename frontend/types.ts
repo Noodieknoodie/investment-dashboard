@@ -3,7 +3,6 @@ export interface Client {
   name: string
   email?: string
   phone?: string
-  companyId?: string
   planProvider: string
   paymentFrequency: "Monthly" | "Quarterly"
   feeStructure: "Flat Rate" | "Percentage of AUM"
@@ -28,28 +27,23 @@ export interface Payment {
   clientId: string
   amount: number
   date: string
-  status: 'pending' | 'completed' | 'failed' | 'Processed' | 'Pending'
+  status: 'Processed' | 'Pending'
   description?: string
-  paymentMethod?: string
   method?: PaymentMethodType | string
-  reference?: string
   notes?: string
   documentUrl?: string
   period?: string
   appliedPeriods?: PaymentPeriod[]
   expectedFee?: number
-  // Added properties for split payments
+  // Flag for split payments (determined by different start/end periods)
   isSplitPayment?: boolean
-  splitGroupId?: string
   aum?: number
 }
 
 export interface PaymentFormData {
-  date?: string
   receivedDate: string
   amount: number | string
   method: PaymentMethodType | string
-  reference?: string
   notes: string
   documentUrl?: string
   attachmentUrl?: string

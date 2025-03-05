@@ -1,8 +1,9 @@
-# backend/database/queries/clients.py
+# backend/database/queries/contracts.py
 # Client-related queries
 from database.connection import execute_query, execute_single_query
 from typing import List, Dict, Any, Optional
 import datetime
+
 def get_all_clients() -> List[Dict[str, Any]]:
     query = """
         SELECT client_id, display_name, full_name, ima_signed_date, onedrive_folder_path
@@ -185,3 +186,44 @@ def update_client_folder_path(client_id: int, folder_path: str) -> bool:
     
     rows_updated = execute_update(query, (normalized_path, client_id))
     return rows_updated > 0
+
+def validate_client_contract(client_id: int, contract_id: int) -> bool:
+    """
+    Validate that a contract belongs to a client.
+    
+    Args:
+        client_id: Client ID
+        contract_id: Contract ID
+        
+    Returns:
+        True if contract belongs to client, False otherwise
+    """
+    query = """
+    SELECT contract_id FROM contracts 
+    WHERE client_id = ? AND contract_id = ? AND valid_to IS NULL
+    """
+    
+    result = execute_single_query(query, (client_id, contract_id))
+    return result is not None
+
+def get_client_contracts(client_id: int) -> List[Dict[str, Any]]:
+    """
+    Get all valid contracts for a specific client.
+    
+    Args:
+        client_id: Client ID
+        
+    Returns:
+        List of contract dictionaries
+    """
+    query = """
+    SELECT 
+        contract_id, client_id, contract_number, provider_name,
+        contract_start_date, fee_type, percent_rate, flat_rate,
+        payment_schedule, num_people, notes
+    FROM contracts
+    WHERE client_id = ? AND valid_to IS NULL
+    ORDER BY contract_start_date DESC
+    """
+    
+    return execute_query(query, (client_id,))

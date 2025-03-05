@@ -50,7 +50,6 @@ export function ClientPaymentPage({
     createPayment,
     updatePayment,
     deletePayment,
-    deleteSplitPaymentGroup,
     refreshPayments
   } = usePayments(clientId);
 
@@ -88,21 +87,12 @@ export function ClientPaymentPage({
     onViewDocument(documentUrl);
   }
 
-  // Handle delete payment (including split payment groups)
+  // Handle delete payment (updated for revised split payment implementation)
   const handleDeletePayment = async (paymentId: string) => {
     try {
       const numericPaymentId = parseInt(paymentId, 10);
-      const payment = uiPayments.find(p => p.id === paymentId);
-
-      if (payment?.isSplitPayment && payment.splitGroupId) {
-        // For split payments, delete the entire group
-        const result = await deleteSplitPaymentGroup(payment.splitGroupId);
-        return result;
-      } else {
-        // For single payments
-        const result = await deletePayment(numericPaymentId);
-        return result;
-      }
+      const success = await deletePayment(numericPaymentId);
+      return success;
     } catch (error) {
       console.error("Error deleting payment:", error);
       return false;
@@ -280,7 +270,7 @@ export function ClientPaymentPage({
                   {editingPayment && (
                     <CardDescription>
                       Payment from {new Date(editingPayment.received_date).toLocaleDateString()}
-                      {editingPayment.split_group_id && (
+                      {editingPayment.is_split_payment && (
                         <span className="ml-2">(Split payment)</span>
                       )}
                     </CardDescription>
@@ -294,7 +284,7 @@ export function ClientPaymentPage({
                       editingPayment
                         ? {
                           receivedDate: editingPayment.received_date,
-                          appliedPeriod: editingPayment.split_group_id ? "multiple" : "single",
+                          appliedPeriod: editingPayment.is_split_payment ? "multiple" : "single",
                           periodValue: editingPayment.applied_start_quarter
                             ? `${editingPayment.applied_start_quarter}-${editingPayment.applied_start_quarter_year}`
                             : editingPayment.applied_start_month

@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { paymentApi } from "@/lib/api"
+import { paymentApi, apiRequest } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { formatPeriod } from "@/lib/mappers"
 import type { PaymentFormData } from "../../types"
@@ -28,6 +28,7 @@ interface PaymentFormProps {
   onSubmit: (data: PaymentFormData) => Promise<boolean>
   isEditing: boolean
   isLoading?: boolean
+  previousPayments?: Array<{ amount: number, date: string }>
 }
 
 export function PaymentForm({
@@ -37,7 +38,8 @@ export function PaymentForm({
   onCancel,
   onSubmit,
   isEditing,
-  isLoading = false
+  isLoading = false,
+  previousPayments = []
 }: PaymentFormProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState<PaymentFormData>(
@@ -66,11 +68,15 @@ export function PaymentForm({
   const [isNotesOpen, setIsNotesOpen] = useState(!!formData.notes || !!formData.attachmentUrl)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [expectedFee, setExpectedFee] = useState<number | null>(null)
+  const [periodsLoading, setPeriodsLoading] = useState(false)
 
   // Fetch available periods when contractId changes
   useEffect(() => {
     if (!contractId) return;
 
+    console.log(`Attempting to fetch periods for client ${clientId}, contract ${contractId}`);
+    setPeriodsLoading(true);
+    
     const fetchPeriods = async () => {
       try {
         const periodsData = await paymentApi.getAvailablePeriods(parseInt(clientId, 10), parseInt(contractId, 10));
@@ -83,6 +89,8 @@ export function PaymentForm({
           description: "Failed to load available payment periods.",
           variant: "destructive",
         });
+      } finally {
+        setPeriodsLoading(false);
       }
     };
 
@@ -180,8 +188,11 @@ export function PaymentForm({
   }
 
   const handleAttachFile = () => {
-    // Implement file attachment logic here
-    console.log("File attachment triggered")
+    // IMPROVED: Document Feature Messaging
+    toast({
+      title: "Document Upload Coming Soon",
+      description: "Document management will be available in a future update.",
+    });
     setHasChanges(true)
   }
 
@@ -233,9 +244,32 @@ export function PaymentForm({
         setIsSubmitting(false);
         return;
       }
+      
+      // IMPROVED: Check for huge payment variance
+      const newAmount = parseFloat(formData.amount as string);
+      const previousPayment = previousPayments.length > 0 ? previousPayments[0].amount : null;
 
-      // Submit form
-      const success = await onSubmit(formData);
+      if (previousPayment && !isEditing) {
+        const percentChange = Math.abs((newAmount - previousPayment) / previousPayment);
+
+        if (percentChange > 0.5) { // 50% change in either direction
+          const confirmProceed = window.confirm(
+            `This payment amount ($${newAmount.toFixed(2)}) is significantly different (${(percentChange * 100).toFixed(0)}% change) from the previous payment ($${previousPayment.toFixed(2)}). Are you sure this is correct?`
+          );
+          if (!confirmProceed) {
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      }
+
+      // Submit form with the contract ID
+      const submissionData = {
+        ...formData,
+        contractId: contractId
+      };
+      
+      const success = await onSubmit(submissionData);
 
       if (success) {
         toast({
@@ -303,7 +337,7 @@ export function PaymentForm({
     setValidationError(null);
   }
 
-  if (isLoading) {
+  if (isLoading || periodsLoading) {
     return (
       <div className="flex justify-center items-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -366,7 +400,7 @@ export function PaymentForm({
                   onValueChange={(value) => handleSelectChange("startPeriod", value)}
                 >
                   <SelectTrigger className="h-10 flex-1">
-                    <SelectValue placeholder="Start period" />
+                    <SelectValue placeholder="Start period (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {formattedPeriods.map((period) => (
@@ -381,7 +415,7 @@ export function PaymentForm({
                 </Select>
                 <Select value={formData.endPeriod} onValueChange={(value) => handleSelectChange("endPeriod", value)}>
                   <SelectTrigger className="h-10 flex-1">
-                    <SelectValue placeholder="End period" />
+                    <SelectValue placeholder="End period (required)" />
                   </SelectTrigger>
                   <SelectContent>
                     {formattedPeriods.map((period) => (
@@ -398,7 +432,7 @@ export function PaymentForm({
             ) : (
               <Select value={formData.periodValue} onValueChange={(value) => handleSelectChange("periodValue", value)}>
                 <SelectTrigger className="w-full h-10">
-                  <SelectValue placeholder="Select period" />
+                  <SelectValue placeholder="Select period (required)" />
                 </SelectTrigger>
                 <SelectContent>
                   {formattedPeriods.map((period) => (
@@ -429,7 +463,7 @@ export function PaymentForm({
               type="number"
               value={formData.aum}
               onChange={handleInputChange}
-              placeholder="0.00"
+              placeholder="Optional - improves fee calculations"
               className="pl-8 h-10"
             />
           </div>
@@ -452,17 +486,17 @@ export function PaymentForm({
               type="number"
               value={formData.amount}
               onChange={handleInputChange}
-              placeholder="0.00"
+              placeholder="Enter payment amount (required)"
               required
               className="pl-8 h-10"
             />
           </div>
           {expectedFee !== null && formData.amount && (
             <div className={`text-xs ${Math.abs(parseFloat(formData.amount as string) - expectedFee) <= expectedFee * 0.05
-                ? 'text-green-600'
-                : Math.abs(parseFloat(formData.amount as string) - expectedFee) <= expectedFee * 0.15
-                  ? 'text-yellow-600'
-                  : 'text-red-600'
+              ? 'text-green-600'
+              : Math.abs(parseFloat(formData.amount as string) - expectedFee) <= expectedFee * 0.15
+                ? 'text-yellow-600'
+                : 'text-red-600'
               }`}>
               {parseFloat(formData.amount as string) > expectedFee
                 ? `+${(parseFloat(formData.amount as string) - expectedFee).toFixed(2)} (${((parseFloat(formData.amount as string) - expectedFee) / expectedFee * 100).toFixed(1)}%)`
@@ -484,7 +518,7 @@ export function PaymentForm({
             onValueChange={(value) => handleSelectChange("method", value)}
           >
             <SelectTrigger className="w-full h-10">
-              <SelectValue placeholder="Select method" />
+              <SelectValue placeholder="Select method (optional)" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Check">Check</SelectItem>
@@ -581,16 +615,17 @@ export function PaymentForm({
                   rows={3}
                   className="resize-none min-h-[80px]"
                 />
+                {/* IMPROVED: Document Feature Button with Message */}
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="absolute right-2 bottom-2 opacity-80 hover:opacity-100"
                   onClick={handleAttachFile}
-                  title="Attach a file"
+                  title="Attach a file (coming soon)"
                 >
                   <Paperclip className="h-4 w-4" />
-                  <span className="sr-only">Attach file</span>
+                  <span className="sr-only">Attach file (coming soon)</span>
                 </Button>
               </div>
               {formData.attachmentUrl && <div className="text-sm text-blue-600 mt-1">1 attachment</div>}

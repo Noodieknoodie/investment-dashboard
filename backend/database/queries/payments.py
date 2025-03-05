@@ -43,7 +43,6 @@ def get_client_payments(client_id: int, limit: int = 20, offset: int = 0) -> Tup
         p.actual_fee,
         p.method,
         p.notes,
-        p.split_group_id,
         p.applied_start_month,
         p.applied_start_month_year,
         p.applied_end_month,
@@ -101,7 +100,6 @@ def get_payment_by_id(payment_id: int) -> Optional[Dict[str, Any]]:
         p.actual_fee,
         p.method,
         p.notes,
-        p.split_group_id,
         p.applied_start_month,
         p.applied_start_month_year,
         p.applied_end_month,
@@ -144,11 +142,11 @@ def create_payment(
     applied_start_quarter: Optional[int],
     applied_start_quarter_year: Optional[int],
     applied_end_quarter: Optional[int],
-    applied_end_quarter_year: Optional[int],
-    split_group_id: Optional[str] = None
+    applied_end_quarter_year: Optional[int]
 ) -> int:
     """
     Create a new payment record.
+    For split payments, start and end period fields differ.
     
     Args:
         All payment fields
@@ -166,7 +164,6 @@ def create_payment(
         actual_fee,
         method,
         notes,
-        split_group_id,
         applied_start_month,
         applied_start_month_year,
         applied_end_month,
@@ -175,7 +172,7 @@ def create_payment(
         applied_start_quarter_year,
         applied_end_quarter,
         applied_end_quarter_year
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     
     params = (
@@ -187,7 +184,6 @@ def create_payment(
         actual_fee,
         method,
         notes,
-        split_group_id,
         applied_start_month,
         applied_start_month_year,
         applied_end_month,
@@ -199,139 +195,6 @@ def create_payment(
     )
     
     return execute_insert(query, params)
-
-def create_split_payments(
-    contract_id: int,
-    client_id: int,
-    received_date: str,
-    total_assets: Optional[int],
-    expected_fee: Optional[float],
-    actual_fee: float,
-    method: Optional[str],
-    notes: Optional[str],
-    is_monthly: bool,
-    start_period: int,
-    start_period_year: int,
-    end_period: int,
-    end_period_year: int
-) -> List[int]:
-    """
-    Create multiple payment records for a split payment.
-    Each period in the range gets an equal portion of the total amount.
-    
-    Args:
-        Contract and client details
-        Payment details
-        is_monthly: True if monthly schedule, False if quarterly
-        start/end period details
-        
-    Returns:
-        List of created payment IDs
-    """
-    # Generate a unique ID for the split payment group
-    split_group_id = str(uuid.uuid4())
-    
-    # Calculate total periods and amount per period
-    periods = []
-    
-    if is_monthly:
-        # Calculate months between start and end
-        start_total_months = start_period_year * 12 + start_period
-        end_total_months = end_period_year * 12 + end_period
-        
-        # If end is before start, swap them (shouldn't happen with validation)
-        if end_total_months < start_total_months:
-            start_period, end_period = end_period, start_period
-            start_period_year, end_period_year = end_period_year, start_period_year
-            start_total_months, end_total_months = end_total_months, start_total_months
-        
-        num_periods = end_total_months - start_total_months + 1
-        
-        # Generate all periods between start and end
-        for i in range(num_periods):
-            total_month = start_total_months + i
-            year = total_month // 12
-            month = total_month % 12
-            if month == 0:
-                month = 12
-                year -= 1
-                
-            periods.append({
-                'month': month,
-                'year': year,
-                'quarter': None,
-                'quarter_year': None
-            })
-    else:
-        # Calculate quarters between start and end
-        start_total_quarters = start_period_year * 4 + start_period
-        end_total_quarters = end_period_year * 4 + end_period
-        
-        # If end is before start, swap them (shouldn't happen with validation)
-        if end_total_quarters < start_total_quarters:
-            start_period, end_period = end_period, start_period
-            start_period_year, end_period_year = end_period_year, start_period_year
-            start_total_quarters, end_total_quarters = end_total_quarters, start_total_quarters
-        
-        num_periods = end_total_quarters - start_total_quarters + 1
-        
-        # Generate all periods between start and end
-        for i in range(num_periods):
-            total_quarter = start_total_quarters + i
-            year = total_quarter // 4
-            quarter = total_quarter % 4
-            if quarter == 0:
-                quarter = 4
-                year -= 1
-                
-            periods.append({
-                'month': None,
-                'year': None,
-                'quarter': quarter,
-                'quarter_year': year
-            })
-    
-    # Calculate payment amount per period (with rounding to two decimal places)
-    amount_per_period = round(actual_fee / num_periods, 2)
-    
-    # Calculate expected fee per period if available
-    expected_fee_per_period = None
-    if expected_fee is not None:
-        expected_fee_per_period = round(expected_fee / num_periods, 2)
-    
-    # Adjust the last period to account for rounding errors
-    last_period_adjustment = round(actual_fee - (amount_per_period * (num_periods - 1)), 2)
-    
-    payment_ids = []
-    
-    # Create each period's payment
-    for i, period in enumerate(periods):
-        # Last period gets the adjustment amount
-        period_amount = last_period_adjustment if i == len(periods) - 1 else amount_per_period
-        
-        payment_id = create_payment(
-            contract_id=contract_id,
-            client_id=client_id,
-            received_date=received_date,
-            total_assets=total_assets,
-            expected_fee=expected_fee_per_period,
-            actual_fee=period_amount,
-            method=method,
-            notes=notes,
-            applied_start_month=period['month'],
-            applied_start_month_year=period['year'],
-            applied_end_month=period['month'],
-            applied_end_month_year=period['year'],
-            applied_start_quarter=period['quarter'],
-            applied_start_quarter_year=period['quarter_year'],
-            applied_end_quarter=period['quarter'],
-            applied_end_quarter_year=period['quarter_year'],
-            split_group_id=split_group_id
-        )
-        
-        payment_ids.append(payment_id)
-    
-    return payment_ids
 
 def update_payment(
     payment_id: int,
@@ -431,48 +294,6 @@ def delete_payment(payment_id: int) -> bool:
     rows_updated = execute_update(query, (payment_id,))
     return rows_updated > 0
 
-def get_split_payment_group(split_group_id: str) -> List[Dict[str, Any]]:
-    """
-    Get all payments in a split payment group.
-    
-    Args:
-        split_group_id: UUID of the split payment group
-        
-    Returns:
-        List of payments in the group
-    """
-    query = """
-    SELECT 
-        payment_id,
-        contract_id,
-        client_id,
-        received_date,
-        total_assets,
-        expected_fee,
-        actual_fee,
-        method,
-        notes,
-        split_group_id,
-        applied_start_month,
-        applied_start_month_year,
-        applied_end_month,
-        applied_end_month_year,
-        applied_start_quarter,
-        applied_start_quarter_year,
-        applied_end_quarter,
-        applied_end_quarter_year
-    FROM 
-        payments
-    WHERE 
-        split_group_id = ? AND
-        valid_to IS NULL
-    ORDER BY 
-        COALESCE(applied_start_month_year, applied_start_quarter_year),
-        COALESCE(applied_start_month, applied_start_quarter)
-    """
-    
-    return execute_query(query, (split_group_id,))
-
 def calculate_expected_fee(contract_id: int, total_assets: Optional[int], period_type: str) -> Optional[float]:
     """
     Calculate expected fee based on contract and assets.
@@ -554,20 +375,161 @@ def get_payment_files(payment_id: int) -> List[Dict[str, Any]]:
     """
     query = """
     SELECT 
-        cf.file_id,
-        cf.client_id,
-        cf.file_name,
-        cf.onedrive_path,
-        cf.uploaded_at,
-        pf.linked_at
+        f.file_id,
+        f.client_id,
+        f.file_name,
+        f.onedrive_path,
+        f.uploaded_at
     FROM 
-        client_files cf
+        client_files f
     JOIN 
-        payment_files pf ON cf.file_id = pf.file_id
+        payment_files pf ON f.file_id = pf.file_id
     WHERE 
         pf.payment_id = ?
-    ORDER BY 
-        pf.linked_at DESC
     """
     
     return execute_query(query, (payment_id,))
+
+def associate_file_with_payment(payment_id: int, file_id: int) -> bool:
+    """
+    Associate a file with a payment.
+    
+    Args:
+        payment_id: Payment ID
+        file_id: File ID
+        
+    Returns:
+        True if association successful, False otherwise
+    """
+    # Check if already associated
+    check_query = """
+    SELECT payment_id FROM payment_files WHERE payment_id = ? AND file_id = ?
+    """
+    existing = execute_single_query(check_query, (payment_id, file_id))
+    if existing:
+        return True  # Already associated
+    
+    query = """
+    INSERT INTO payment_files (payment_id, file_id) VALUES (?, ?)
+    """
+    
+    try:
+        execute_insert(query, (payment_id, file_id))
+        return True
+    except Exception:
+        return False
+
+def disassociate_file_from_payment(payment_id: int, file_id: int) -> bool:
+    """
+    Remove association between a file and a payment.
+    
+    Args:
+        payment_id: Payment ID
+        file_id: File ID
+        
+    Returns:
+        True if disassociation successful, False otherwise
+    """
+    query = """
+    DELETE FROM payment_files WHERE payment_id = ? AND file_id = ?
+    """
+    
+    rows_deleted = execute_delete(query, (payment_id, file_id))
+    return rows_deleted > 0
+
+def get_payments_by_period(
+    client_id: int, 
+    is_monthly: bool, 
+    period: int, 
+    year: int
+) -> List[Dict[str, Any]]:
+    """
+    Get all payments for a specific period (month or quarter).
+    
+    Args:
+        client_id: Client ID
+        is_monthly: True for monthly, False for quarterly
+        period: Month or quarter number
+        year: Year
+        
+    Returns:
+        List of payment dictionaries
+    """
+    if is_monthly:
+        query = """
+        SELECT 
+            payment_id,
+            contract_id,
+            received_date,
+            total_assets,
+            expected_fee,
+            actual_fee,
+            method,
+            notes,
+            applied_start_month,
+            applied_start_month_year,
+            applied_end_month,
+            applied_end_month_year
+        FROM 
+            payments
+        WHERE 
+            client_id = ? AND
+            ((applied_start_month <= ? AND applied_end_month >= ? AND
+              applied_start_month_year = ? AND applied_end_month_year = ?)
+             OR
+             (applied_start_month_year < ? AND applied_end_month_year > ?)
+             OR
+             (applied_start_month_year = ? AND applied_end_month_year > ? AND
+              applied_start_month <= ?)
+             OR
+             (applied_start_month_year < ? AND applied_end_month_year = ? AND
+              applied_end_month >= ?)) AND
+            valid_to IS NULL
+        """
+        params = (
+            client_id, 
+            period, period, year, year,
+            year, year,
+            year, year, period,
+            year, year, period
+        )
+    else:
+        query = """
+        SELECT 
+            payment_id,
+            contract_id,
+            received_date,
+            total_assets,
+            expected_fee,
+            actual_fee,
+            method,
+            notes,
+            applied_start_quarter,
+            applied_start_quarter_year,
+            applied_end_quarter,
+            applied_end_quarter_year
+        FROM 
+            payments
+        WHERE 
+            client_id = ? AND
+            ((applied_start_quarter <= ? AND applied_end_quarter >= ? AND
+              applied_start_quarter_year = ? AND applied_end_quarter_year = ?)
+             OR
+             (applied_start_quarter_year < ? AND applied_end_quarter_year > ?)
+             OR
+             (applied_start_quarter_year = ? AND applied_end_quarter_year > ? AND
+              applied_start_quarter <= ?)
+             OR
+             (applied_start_quarter_year < ? AND applied_end_quarter_year = ? AND
+              applied_end_quarter >= ?)) AND
+            valid_to IS NULL
+        """
+        params = (
+            client_id, 
+            period, period, year, year,
+            year, year,
+            year, year, period,
+            year, year, period
+        )
+    
+    return execute_query(query, params)

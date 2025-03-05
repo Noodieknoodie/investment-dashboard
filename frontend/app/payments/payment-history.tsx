@@ -56,7 +56,7 @@ export function PaymentHistory({
 
   const handleDeleteClick = (payment: Payment) => {
     if (payment.isSplitPayment) {
-      setSplitGroupToDelete(payment.splitGroupId || null);
+      setSplitGroupToDelete(payment.id || null);
       setSplitGroupPaymentCount(payment.appliedPeriods?.length || 0);
       setDeletingSplitGroup(true);
     } else {
@@ -73,10 +73,8 @@ export function PaymentHistory({
       let success = false;
 
       if (deletingSplitGroup && splitGroupToDelete) {
-        // Delete the entire split payment group
-        // This would need implementation in the backend
-        // For now, we'll just delete the first payment
-        success = await onDelete(payments.find(p => p.splitGroupId === splitGroupToDelete)?.id || "");
+        // Delete the payment directly since we now have a single record for split payments
+        success = await onDelete(splitGroupToDelete);
       } else if (paymentToDelete) {
         success = await onDelete(paymentToDelete.id);
       }
@@ -235,7 +233,7 @@ export function PaymentHistory({
                         )}
                       </TableCell>
                       <TableCell>
-                        {payment.aum ? formatCurrency(payment.aum) : (client?.aum ? formatCurrency(client.aum) : "N/A")}
+                        {payment.aum ? formatCurrency(payment.aum) : "No AUM data"}
                       </TableCell>
                       <TableCell>{client?.paymentFrequency || "N/A"}</TableCell>
                       <TableCell>
@@ -247,14 +245,17 @@ export function PaymentHistory({
                         }
                       </TableCell>
                       <TableCell>
+                        {/* IMPROVED: Better Expected Fee Display */}
                         {payment.expectedFee ? formatCurrency(payment.expectedFee) :
-                          (client && client.feeStructure === "Flat Rate" && client.feeAmount
-                            ? formatCurrency(client.feeAmount / (client.paymentFrequency === "Monthly" ? 12 : 4))
-                            : client?.aum && client?.feePercentage
-                              ? formatCurrency((client.aum * (client.feePercentage / 100)) /
-                                (client.paymentFrequency === "Monthly" ? 12 : 4))
-                              : "N/A"
-                          )
+                          payment.aum && client?.feePercentage
+                            ? formatCurrency((payment.aum * (client.feePercentage / 100)) /
+                              (client.paymentFrequency === "Monthly" ? 12 : 4))
+                            : (
+                              <span className="text-muted-foreground">
+                                ~{formatCurrency(payment.amount)}
+                                <span className="text-xs block">(based on payment)</span>
+                              </span>
+                            )
                         }
                       </TableCell>
                       <TableCell>

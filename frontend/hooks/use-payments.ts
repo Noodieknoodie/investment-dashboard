@@ -1,3 +1,4 @@
+// frontend/hooks/use-payments.ts
 import { useState, useEffect } from 'react';
 import { paymentApi, Payment, PaymentWithDetails, PaymentCreate, PaymentUpdate } from '@/lib/api';
 
@@ -8,7 +9,6 @@ interface UsePaymentsReturn {
   createPayment: (data: PaymentCreate) => Promise<Payment>;
   updatePayment: (paymentId: number, data: PaymentUpdate) => Promise<Payment>;
   deletePayment: (paymentId: number) => Promise<boolean>;
-  deleteSplitPaymentGroup: (splitGroupId: string) => Promise<boolean>;
   refreshPayments: () => Promise<void>;
 }
 
@@ -72,33 +72,12 @@ export function usePayments(clientId: number | null): UsePaymentsReturn {
   const deletePayment = async (paymentId: number): Promise<boolean> => {
     try {
       const result = await paymentApi.deletePayment(paymentId);
-
-      if (result.requires_confirmation) {
-        // This is a split payment that requires confirmation to delete the group
-        return false;
-      }
-
       if (result.success) {
         await loadPayments(); // Refresh the payments list
       }
       return result.success;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to delete payment');
-      setError(error);
-      throw error;
-    }
-  };
-
-  // Delete a split payment group
-  const deleteSplitPaymentGroup = async (splitGroupId: string): Promise<boolean> => {
-    try {
-      const result = await paymentApi.deleteSplitPaymentGroup(splitGroupId);
-      if (result.success) {
-        await loadPayments(); // Refresh the payments list
-      }
-      return result.success;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to delete split payment group');
       setError(error);
       throw error;
     }
@@ -111,7 +90,6 @@ export function usePayments(clientId: number | null): UsePaymentsReturn {
     createPayment,
     updatePayment,
     deletePayment,
-    deleteSplitPaymentGroup,
     refreshPayments: loadPayments
   };
 }
